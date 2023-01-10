@@ -1,0 +1,16 @@
+name: mimo_env
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pandas
+  - scipy
+  - numpy
+  - matplotlib
+  - seaborn
+  - statsmodels
+  - scikit-learn
+  - pip:
+    - notebook
+    - pynapple
