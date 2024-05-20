@@ -1,5 +1,6 @@
 name: mimo_env
 channels:
+  - conda-forge
   - defaults
 dependencies:
   - python=3.10
@@ -12,6 +13,8 @@ dependencies:
   - statsmodels
   - scikit-learn
   - pywavelets
+  - tqdm
+  - xarray
   - pip:
     - notebook
     - pynapple
