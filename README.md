@@ -4,9 +4,12 @@ This provides a collection of functions and routines for standard data processin
 
 ### Setting up mimo_pack
 
-Create a conda environment for working with mimo_pack.
+Download the zip file of mimo_pack using the green button above.
 
-In the terminal navigate to the mimo_pack directory and then enter:
+Unzip the package and place the contents of the folder 'mimo_pack-main' inside a folder with the name of your project.
+
+In the command, navigate to that folder with your project name. Then, create a conda environment for working with mimo_pack.
+
 > conda env create -n PROJECT_NAME -f environment.yml`
 
 where `PROJECT_NAME` is the name you want to give to the environment. You should create a new environment for each project. 
@@ -27,4 +30,4 @@ From there, you can load the tutorials to familiarize yourself with types of ana
 
 ### Adding your own code
 
-mimo_pack is intended to provide an environment and suite of functions that facilitate analysis of your own data. First, rename the 'mimo_pack' directory to your project name, preferrably `PROJECT_NAME`. To add your own code, create a folder in the mimo_pack directory called 'project' and add your scripts to it. From there, you can access the functions in mimo_pack using import statements. If you want to do something very similar to what is carried out in the tutorials, you can copy a tutorial into your 'project' directory and then modify it to fit your needs.
+mimo_pack is intended to provide an environment and suite of functions that facilitate analysis of your own data.  To add your own code, create a folder in the mimo_pack directory called 'project' and add your scripts to it. From there, you can access the functions in mimo_pack using import statements. If you want to do something very similar to what is carried out in the tutorials, you can copy a tutorial into your 'project' directory and then modify it to fit your needs.
