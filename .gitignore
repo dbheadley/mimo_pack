@@ -1,3 +1,4 @@
 __pycache__/
+project/
+mimo_pack.egg-info/
 .DS_Store
-mycode/

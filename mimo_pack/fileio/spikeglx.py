@@ -6,7 +6,6 @@ import os
 import sys
 import numpy as np
 import re
-sys.path.append('../code/')
 
 def read_meta(meta_path):
     """

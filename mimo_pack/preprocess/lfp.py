@@ -3,13 +3,11 @@
 # Created: 2024-05-19
 
 import os
-import sys
-sys.path.append('../Code/')
 import numpy as np
 from tqdm import tqdm
 from scipy.signal import butter, filtfilt
 
-from fileio.spikeglx import read_meta, get_meta_path
+from ..fileio.spikeglx import read_meta, get_meta_path
 
 def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp'):
     """
