@@ -9,7 +9,7 @@ import sys
 import os
 
 
-def as_pynapple(phy_dir, time_file=None):
+def as_pynapple(phy_dir, time_file=None, suffix=""):
     """
     Loads spike times from Phy formatted files as a pynapple time series group
     
@@ -22,6 +22,8 @@ def as_pynapple(phy_dir, time_file=None):
         as a flat array of doubles. Used when just dividing time index by sample
         rate will not suffice and explicit time points are required because 
         multiple files had to be synchronized with each other.
+    suffix : string
+        suffix to add to the end of file names when loading files.
     
     Returns
     ----------
@@ -32,8 +34,8 @@ def as_pynapple(phy_dir, time_file=None):
     # file paths that are necessary
     fpaths = {}
     fpaths["par"] = os.path.join(phy_dir, "params.py")
-    fpaths["spk"] = os.path.join(phy_dir, "spike_times.npy")
-    fpaths["clu"] = os.path.join(phy_dir, "spike_clusters.npy")
+    fpaths["spk"] = os.path.join(phy_dir, "spike_times{}.npy".format(suffix))
+    fpaths["clu"] = os.path.join(phy_dir, "spike_clusters{}.npy".format(suffix))
 
     # check that essential files are present
     for fpath in fpaths.values():
@@ -44,7 +46,6 @@ def as_pynapple(phy_dir, time_file=None):
     sys.path.append(phy_dir)
     import params as params
 
-    samp_num = params.n_samples_dat
     samp_rate = params.sample_rate
 
     # load spike indices and their cluster IDs
@@ -67,7 +68,7 @@ def as_pynapple(phy_dir, time_file=None):
         sess_end = time_list[-1]
     else:
         sess_start = 0
-        sess_end = samp_num / samp_rate
+        sess_end = spk_times.max() / samp_rate
     sess_set = nap.IntervalSet(sess_start, sess_end)
 
     # assign spikes to clusters and create time series group
@@ -80,6 +81,13 @@ def as_pynapple(phy_dir, time_file=None):
         spk_dict[id] = nap.Ts(curr_spk_times, time_units="s", time_support=sess_set)
     spks = nap.TsGroup(spk_dict)
 
+    # add cluster class to the spike group
+    group_fpath = os.path.join(phy_dir, "cluster_group{}.tsv".format(suffix))
+    if os.path.isfile(group_fpath):
+        clu_group = pd.read_csv(group_fpath, sep="\t", index_col="cluster_id")
+        print(clu_group)
+        spks.set_info(clu_group)
+    
     # if a cluster properties file is present, add the cluster properties
     # to the spike group
     prop_fpath = os.path.join(phy_dir, "cluster_props.tsv")
@@ -98,7 +106,7 @@ def as_pynapple(phy_dir, time_file=None):
         spks.set_info(clu_props)
 
     # if a templates file is present, add the spike template to the spike group
-    tplt_fpath = os.path.join(phy_dir, "templates.npy")
+    tplt_fpath = os.path.join(phy_dir, "templates{}.npy".format(suffix))
     if os.path.isfile(tplt_fpath):
         spk_waves = np.load(tplt_fpath)
         spk_waves = [
