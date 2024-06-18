@@ -28,22 +28,29 @@ def violinplot_log(dataset, axes=None, **kwargs):
     else:
         ax = axes
 
+    # log transfom the data
     # get range of data values, set min and max to nearest power of 10
-    data_min = np.floor(np.log10(np.min(dataset)))
-    data_max = np.ceil(np.log10(np.max(dataset)))
+    if type(dataset) == list:
+        dataset = [np.log10(x) for x in dataset]
+        data_min = np.floor(np.min([np.min(x) for x in dataset]))
+        data_max = np.ceil(np.max([np.max(x) for x in dataset]))
+    else:
+        dataset = np.log10(dataset)
+        data_min = np.floor(np.min(dataset))
+        data_max = np.ceil(np.max(dataset))
     
     # create a log scale for the y-axis
     pow10 = np.power(10, np.arange(data_min, data_max+1))
     yticks = (np.arange(1, 10) * pow10[:, np.newaxis]).ravel()
 
     # create the plot
-    ax.violinplot(np.log10(dataset), **kwargs)
+    ax.violinplot(dataset, **kwargs)
 
     # set the y-axis scale and labels
     ax.set_yticks(np.log10(yticks))
 
     # label the y-ticks that are in pow10
-    yticklabels = [f'{int(y)}' if y in pow10 else '' for y in yticks]
+    yticklabels = [f'{float(y)}' if y in pow10 else '' for y in yticks]
     ax.set_yticklabels(yticklabels)
 
     return ax
