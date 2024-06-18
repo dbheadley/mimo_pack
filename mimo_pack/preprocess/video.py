@@ -42,7 +42,7 @@ def tif_to_video(folder_path, output_filename, fps=30):
     files_df.sort_values(['epoch_num', 'frame_num'], inplace=True)
 
     img = cv2.imread(tif_files[0])
-    height, width, layers = img.shape
+    height, width, _ = img.shape
 
     # Create a VideoWriter object
     video = cv2.VideoWriter(output_filename, cv2.VideoWriter_fourcc(*'I420'), fps, (width, height))
