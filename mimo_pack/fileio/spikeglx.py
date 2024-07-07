@@ -4,7 +4,9 @@
 
 import os
 import numpy as np
+import pandas as pd
 import re
+from dclut import create_dclut
 
 def read_meta(bin_path):
     """
@@ -144,7 +146,7 @@ def get_geommap(bin_path):
 
     Returns
     -------
-    gmap : np.ndarray
+    g_df : pd.DataFrame
         Geometry map of the recorded electrodes. Each row is a channel.
         The columns are: shank, x, y, used (u-flag)
     """
@@ -165,7 +167,37 @@ def get_geommap(bin_path):
     
     gmap[:, 1] += gmap[:, 0] * prb_params['shank_spacing']
 
-    return gmap
+    g_df = pd.DataFrame(gmap, columns=['shank', 'x', 'y', 'used'])
+    return g_df
+
+def get_chanmap(bin_path):
+    """
+    Get the channel map of the binary file.
+    
+    Parameters
+    ----------
+    bin_path : str
+        Path to the binary file
+        
+    Returns
+    -------
+    c_df : pd.DataFrame
+        Channel map of the binary file. Each row is a channel.
+        The columns are: name, order
+    """
+
+    meta = read_meta(bin_path)
+    chanmap = meta['~snsChanMap']
+
+    scm_split = re.findall(r'\((.*?)\)', chanmap)
+    ch_names = []
+    ch_order = []
+    for s in scm_split[1:]:
+        ch_names.append(s.split(':')[0])
+        ch_order.append(int(s.split(':')[1]))
+    
+    c_df = pd.DataFrame({'name': ch_names, 'order': ch_order})
+    return c_df
 
 
 def probe_params(probe_pn):
@@ -191,3 +223,53 @@ def probe_params(probe_pn):
         raise ValueError('Probe part number not recognized')
     
     return params
+
+
+def dclut_from_meta(bin_path, dcl_path=None):
+    """
+    Create a dclut json file from the .meta file associated with a SpikeGLX. bin file
+
+    Parameters
+    ----------
+    bin_path : str
+        Path to the binary file
+    
+    Optional
+    --------
+    dcl_path : str
+        Path to save the dclut json file. If not provided, the file will be saved in
+        the same directory as the binary file with the same name but with a .dclut extension.
+    
+    Returns
+    -------
+    dcl_path : str
+        Path to the dclut json file
+    """
+
+    gmap = get_geommap(bin_path)
+    chmap = get_chanmap(bin_path)
+    meta = read_meta(bin_path)
+
+    chan_props = chmap.merge(gmap, left_index=True, right_index=True, how='outer')
+    chan_num = meta['nSavedChans']
+    t_num = meta['fileSizeBytes'] // (2 * chan_num)
+
+    scales = [{'name': 'time', 'dim': 0, 'unit': 'seconds', 'type': 'linear', 'val': [1/meta['imSampRate'], 0]}, 
+              {'name': 'channel', 'dim': 1, 'unit': 'none', 'type': 'index', 'val': None}, 
+              {'name': 'ch_name', 'dim': 1, 'unit': 'none', 'type': 'list', 'val': chan_props['name'].values}, 
+              {'name': 'ch_order', 'dim': 1, 'unit': 'none', 'type': 'list', 'val': chan_props['order'].values}, 
+              {'name': 'ch_x', 'dim': 1, 'unit': 'um', 'type': 'list', 'val': chan_props['x'].values}, 
+              {'name': 'ch_y', 'dim': 1, 'unit': 'um', 'type': 'list', 'val': chan_props['y'].values}, 
+              {'name': 'ch_shank', 'dim': 1, 'unit': 'none', 'type': 'list', 'val': chan_props['shank'].values}]
+    
+    # scale_names = ['time', 'channel', 'ch_name', 'ch_order', 'ch_x', 'ch_y', 'ch_shank']
+    # scale_dims = [0, 1, 1, 1, 1, 1, 1]
+    # scale_units = ['seconds', 'none', 'none', 'none', 'um', 'um', 'none']
+    # scale_types = ['linear', 'index', 'list', 'list', 'list', 'list', 'list']
+    # scale_vals = [[1/meta['imSampRate'], 0], None, chan_props['name'].values, 
+    #             chan_props['order'].values, chan_props['x'].values, 
+    #             chan_props['y'].values, chan_props['shank'].values]
+    
+
+    dcl_path = create_dclut(bin_path, [t_num, chan_num], dtype='int16', data_name='data',
+                        data_unit='au', scales = scales)
