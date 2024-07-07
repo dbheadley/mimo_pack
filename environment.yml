@@ -20,3 +20,4 @@ dependencies:
     - pynapple
     - pyabf
     - twine
+    - dclut

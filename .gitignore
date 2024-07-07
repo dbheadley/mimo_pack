@@ -2,3 +2,4 @@ __pycache__/
 results/
 mimo_pack.egg-info/
 .DS_Store
+.ipynb_checkpoints/
