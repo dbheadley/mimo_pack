@@ -19,3 +19,4 @@ dependencies:
     - notebook
     - pynapple
     - pyabf
+    - twine
