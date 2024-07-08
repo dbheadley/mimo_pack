@@ -224,6 +224,42 @@ def probe_params(probe_pn):
     
     return params
 
+def int2uV(bin_path):
+    """
+    Get the conversion factor from binary data to uV.
+    
+    Parameters
+    ----------
+    bin_path : str
+        Path to the binary file
+        
+    Returns
+    -------
+    conv : float
+        Conversion factor from binary data to uV
+    """
+
+    meta = read_meta(bin_path)
+
+    if meta['typeThis'] == 'imec':
+        if 'imMaxInt' in meta:
+            max_int = meta['imMaxInt']
+        else:
+            max_int = 512
+        aiRange = meta['imAiRangeMax']
+        gain = meta['imChan0apGain']
+    elif meta['typeThis'] == 'nidq':
+        max_int = meta['niMaxInt']
+        aiRange = meta['niAiRangeMax']
+        gain = 1
+    else:
+        max_int = 1
+        aiRange = 1
+        gain = 1
+    
+    print(max_int, aiRange)
+    conv = ((float(aiRange) / max_int) / gain) * 1e6
+    return conv
 
 def dclut_from_meta(bin_path, dcl_path=None):
     """
@@ -245,23 +281,39 @@ def dclut_from_meta(bin_path, dcl_path=None):
     dcl_path : str
         Path to the dclut json file
     """
-
-    gmap = get_geommap(bin_path)
-    chmap = get_chanmap(bin_path)
+    
     meta = read_meta(bin_path)
-
-    chan_props = chmap.merge(gmap, left_index=True, right_index=True, how='outer')
+    chmap = get_chanmap(bin_path)
+    
     chan_num = meta['nSavedChans']
     t_num = meta['fileSizeBytes'] // (2 * chan_num)
 
-    scales = [{'name': 'time', 'dim': 0, 'unit': 'seconds', 'type': 'linear', 'val': [1/meta['imSampRate'], 0]}, 
-              {'name': 'channel', 'dim': 1, 'unit': 'none', 'type': 'index', 'val': None}, 
-              {'name': 'ch_name', 'dim': 1, 'unit': 'none', 'type': 'list', 'val': chan_props['name'].values}, 
-              {'name': 'ch_order', 'dim': 1, 'unit': 'none', 'type': 'list', 'val': chan_props['order'].values}, 
-              {'name': 'ch_x', 'dim': 1, 'unit': 'um', 'type': 'list', 'val': chan_props['x'].values}, 
-              {'name': 'ch_y', 'dim': 1, 'unit': 'um', 'type': 'list', 'val': chan_props['y'].values}, 
-              {'name': 'ch_shank', 'dim': 1, 'unit': 'none', 'type': 'list', 'val': chan_props['shank'].values}]
+    if meta['typeThis'] == 'imec':
+        gmap = get_geommap(bin_path)
+        chan_props = chmap.merge(gmap, left_index=True, right_index=True, how='outer')
+        scales = [{'name': 'time', 'dim': 0, 'unit': 'seconds', 
+                   'type': 'linear', 'val': [1/meta['imSampRate'], 0]}, 
+                  {'name': 'channel', 'dim': 1, 'unit': 'none', 
+                   'type': 'index', 'val': None}, 
+                  {'name': 'ch_name', 'dim': 1, 'unit': 'none', 
+                   'type': 'list', 'val': chan_props['name'].values}, 
+                  {'name': 'ch_order', 'dim': 1, 'unit': 'none', 
+                   'type': 'list', 'val': chan_props['order'].values}, 
+                  {'name': 'ch_x', 'dim': 1, 'unit': 'um', 
+                   'type': 'list', 'val': chan_props['x'].values}, 
+                  {'name': 'ch_y', 'dim': 1, 'unit': 'um', 
+                   'type': 'list', 'val': chan_props['y'].values}, 
+                  {'name': 'ch_shank', 'dim': 1, 'unit': 'none', 
+                   'type': 'list', 'val': chan_props['shank'].values}]
+    elif meta['typeThis'] == 'nidq':
+        scales = [{'name': 'time', 'dim': 0, 'unit': 'seconds', 
+                   'type': 'linear', 'val': [1/meta['niSampRate'], 0]}, 
+                  {'name': 'channel', 'dim': 1, 'unit': 'none', 
+                   'type': 'index', 'val': None}, 
+                  {'name': 'ch_name', 'dim': 1, 'unit': 'none', 
+                   'type': 'list', 'val': chmap['name'].values}]
 
-    dcl_path = create_dclut(bin_path, [t_num, chan_num], dcl_path=dcl_path, dtype='int16', data_name='data',
-                        data_unit='au', scales = scales)
+    dcl_path = create_dclut(bin_path, [t_num, chan_num], dcl_path=dcl_path, 
+                            dtype='int16', data_name='data', data_unit='au', 
+                            scales = scales)
     return dcl_path
