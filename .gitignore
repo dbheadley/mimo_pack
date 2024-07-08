@@ -3,3 +3,6 @@ results/
 mimo_pack.egg-info/
 .DS_Store
 .ipynb_checkpoints/
+build/
+dist/
+dist/mimo_pack-0.0.0-py3.10.egg
