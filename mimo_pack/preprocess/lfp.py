@@ -35,8 +35,7 @@ def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp'):
         raise FileNotFoundError('Binary file {} not found'.format(bin_path))
     
     # Get the meta data
-    meta_path = get_meta_path(bin_path)
-    meta = read_meta(meta_path)
+    meta = read_meta(bin_path)
 
     fs = meta['imSampRate']
     chan_num = meta['nSavedChans']

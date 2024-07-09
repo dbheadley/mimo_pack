@@ -224,7 +224,7 @@ def probe_params(probe_pn):
     
     return params
 
-def int2uV(bin_path):
+def int2uv(bin_path):
     """
     Get the conversion factor from binary data to uV.
     
@@ -257,7 +257,6 @@ def int2uV(bin_path):
         aiRange = 1
         gain = 1
     
-    print(max_int, aiRange)
     conv = ((float(aiRange) / max_int) / gain) * 1e6
     return conv
 
