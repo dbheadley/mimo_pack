@@ -2,151 +2,123 @@
 # Author: Drew Headley
 # Created: 2024-07-08
 
-function [tOthNew, qualMetrics] = datdattimealign(fPathOth,fPathRef,chanOth,chanRef)
-%% datdattimealign
-% Synchronizes the timing of two dat files
+import numpy as np
+from tqdm import tqdm
+from scipy.stats import zscore
+from scipy.ndimage import binary_opening
 
-%% Syntax
-%# timesOthNew = datdattimealign(fPathOth,fPathRef,chanOth,chanRef)
+def align_sync(sync_t, sync_r, time_r, matchlen=30):
+    """
+    Aligns two synchronization signals based on shared pulse durations.
 
-%% Description
-% A synchonization pulse train shared between two dat files, fPathOth and
-% fPathRef, is used to synchronize their times. The pulse train signals are
-% on chanOth and chanRef, respectively. The _t file of fPathOth is changed
-% to reflect the timestamps in fPathRef. The original _t file for fPathOth
-% is overwritten with the new timestamps. Thus, the two files can now be
-% called with the same time reference.
+    Parameters
+    ----------
+    sync_o : np.ndarray
+        Synchronization signal from the target recording
+    sync_r : np.ndarray
+        Synchronization signal from the reference recording
+    time_r : np.ndarray
+        Time points corresponding to the reference recording
+    matchlen : int
+        Length of the pulse to match in samples
 
-%% INPUT
-%  * fPathOth - a string, the name of the binary file whose _t file will
-% be synchronized.
-%  * fPathRef - a string, the name of the binary file that will be
-% used as the timing reference.
-%  * chanOth - an interger or string, the channel carrying the
-%  synchronization signal in fPathOth.
-%  * chanRef - an interger or string, the channel carrying the
-%  synchronization signal in fPathRef.
+    Returns
+    -------
+    align_table : np.ndarray
+        Nx2 array of time points from the reference recording that 
+        correspond to the target recording. First column is the index
+        in the target recording, second column is the corresponding time 
+        point from the reference recording.
+    """
+    # ensure consistent format
+    sync_t = sync_t.ravel()
+    sync_r = sync_r.ravel()
+    time_r = time_r.ravel()
 
+    # Convert to boolean
+    sync_t = np.where(zscore(sync_t) > 0, 1, 0)
+    sync_r = np.where(zscore(sync_r) > 0, 1, 0)
 
-%% OUTPUT
-% * tOthNew - an array of number, the new timestamps for fPathOth that are
-% aligned with those in fPathRef
-% * qualMetrics - a structure, metrics for the quality of the time
-% alignment.
-%       -MedianDT: the median time step based on interpolation
-%       -MinDT: the shortest time step based on interpolation
-%       -MaxDT: the longest time step based on interpolation
-%       -InterpPercent: the percentage of time points aligned via interpolation
+    # Get pulse properties sequence
+    edges_t = find_pulse_edges(sync_t)
+    edges_r = find_pulse_edges(sync_r)
 
-%% Example
+    # Calculate pulse durations
+    dur_t = np.diff(edges_t, axis=1)
+    dur_r = np.diff(edges_r, axis=1)
 
-%% Executable code
+    # Align pulse sequences
+    pulse_pairs = align_series(dur_r, dur_t, matchlen)
+    print(pulse_pairs)
+    align_t = edges_t[pulse_pairs[:,1],0]
+    align_r = edges_r[pulse_pairs[:,0],0]
 
-% load synchrony channels
-syncOth = readdat(fPathOth,'selchans', chanOth);
-syncRef = readdat(fPathRef,'selchans', chanRef);
+    # Match pulse edges to time points
+    time_edge_r = time_r[align_r]
 
-othInfo = datinfo(fPathOth);
+    align_table = np.stack([align_t, time_edge_r], axis=1)
 
-% reference time points
-refTPts = syncRef.tPts{1};
-
-% convert to boolean
-syncOth = zscore(syncOth.traces{1})>0;
-syncRef = zscore(syncRef.traces{1})>0;
-
-% get pulse duration sequence
-seqOth = regionprops(syncOth,{'Area' 'PixelIdxList'});
-seqRef = regionprops(syncRef,{'Area' 'PixelIdxList'});
-
-% align pulse sequences
-pulseAligns = MeasureAlignment(vertcat(seqRef.Area),vertcat(seqOth.Area),30);
-pulseEdgesOth = cellfun(@(x)x(1),{seqOth(pulseAligns(:,2)).PixelIdxList});
-pulseEdgesRef = cellfun(@(x)x(1),{seqRef(pulseAligns(:,1)).PixelIdxList});
-pulseEdgesOth = pulseEdgesOth(:);
-pulseEdgesRef = pulseEdgesRef(:);
-
-% if pulse is at the beginning, remove it because its start is ambiguous
-if (pulseEdgesRef(1)==1)
-    pulseEdgesRef(1) = [];
-    pulseEdgesOth(1) = [];
-end
-
-% match pulse edges to time points
-tPulseEdgesRef = refTPts(pulseEdgesRef);
-
-% generate new time points for oth that are aligned with ref
-tOthNew = interp1(pulseEdgesOth', tPulseEdgesRef', ...
-                  pulseEdgesOth(1):pulseEdgesOth(end));
-
-% calculate quality metrics based on interpolation results
-dTList = diff(tOthNew);
-medDT = median(dTList);
-minDT = min(dTList);
-maxDT = max(dTList);
-qualMetrics.MedianDT = medDT;
-qualMetrics.MinDT = minDT;
-qualMetrics.MaxDT = maxDT;
-qualMetrics.InterpPercent = length(tOthNew)/length(syncOth);
-
-% add times for the beginning and end of the file
-tOthNew = [(-((pulseEdgesOth(1)-1):-1:1)*medDT)+tOthNew(1) tOthNew];
-
-remTPts = length(syncOth)-length(tOthNew);
-tOthNew = [tOthNew tOthNew(end) + ((1:remTPts)*medDT)];
+    return align_table
 
 
-% overwrite old _t file for oth with new time points
-othFID = fopen(othInfo.TFile,'w');
-fwrite(othFID,tOthNew,'double');
-fclose(othFID);
+def find_pulse_edges(pulse_ser):
+    """
+    Find pulses return their start and end indices
 
-
-
-function seqPairs = MeasureAlignment(ser1, ser2, matchLen)
-    % seqPairs are the matched entries in ser1 and ser2. For every matched
-    % pair the index of the entry in ser1 is given in column 1, and the
-    % corresponding entry in ser2 is given in column 2.
-    % matchLen should be an even number
+    Parameters
+    ----------
+    pulse_ser : np.array
+        Binary array of pulses
     
-    if rem(matchLen,2) == 1
-        error('Match Length must be an even number');
-    end
-    
-    serLen1 = length(ser1)+matchLen;
-    serLen2 = length(ser2)+matchLen;
-    
-    % pad with infs to handle edge effects
-    ser1 = [inf(matchLen,1); zscore(ser1(:)); inf(matchLen,1)];
-    ser2 = [inf(matchLen,1); zscore(ser2(:)); inf(matchLen,1)];
+    Returns
+    -------
+    edges : np.ndarray
+        Nx2 array of pulse start and end indices.
+        First column is start, second column is end.
+    """
 
-    serPt1 = matchLen+1;
-    serPt2 = matchLen+1;
+    # prepare pulse series for edge detection, enable edge
+    # detection at the beginning and end of the series
+    pulse_ser = np.pad(pulse_ser, (1,1), 'constant')
+
+    # find pulse starts and ends
+    starts = np.where(np.diff(pulse_ser) == 1)[0]
+    ends = np.where(np.diff(pulse_ser) == -1)[0]-1
+
+    # stack starts and ends into Nx2 array
+    edges = np.stack([starts, ends], axis=1)
     
-    seqPairs = [];
-    waitH = waitbar(0,'Aligning pulse sequences');
-    % matching loop
-    while (serPt1 <= serLen1)
-        waitbar(serPt1/serLen1,waitH);
-        
-        serOff2 = 0;
-        while ((serPt2+serOff2) <= serLen2)
-            
-            seqDiff = bwareaopen(abs(ser1(serPt1+[-matchLen:matchLen])...
-                                     -ser2((serPt2+serOff2)+[-matchLen:matchLen]))<1,matchLen);
-            if seqDiff(matchLen+1)
-                serPt2 = serPt2 + serOff2;
-                seqPairs(end+1,:) = [serPt1 serPt2];
-                serPt2 = serPt2 + 1;
-                break;
-            else
-                serOff2 = serOff2 + 1;
-            end
-        end
-        serPt1 = serPt1 + 1;
-    end
-    
-    close(waitH);      
-    seqPairs = seqPairs-matchLen;
-end            
-            
+    return edges
+
+def align_series(ser1, ser2, matchlen, verbose=True):
+    if matchlen % 2 == 1:
+        raise ValueError('Match Length must be an even number')
+
+    ser1 = ser1.ravel()
+    ser2 = ser2.ravel()
+
+    ser1 = np.pad(zscore(ser1), (matchlen, matchlen), constant_values=np.nan)
+    ser2 = np.pad(zscore(ser2), (matchlen, matchlen), constant_values=np.nan)
+   
+
+    stop1 = len(ser1) - matchlen
+    stop2 = len(ser2) - matchlen
+    s2 = matchlen + 1
+    pairs = []
+    if verbose:
+        outer_iter = tqdm(range(matchlen+1, stop1))
+    else:
+        outer_iter = range(matchlen+1, stop1)
+
+    for s1 in outer_iter:
+        for s2off in range(0,stop2-s2):
+            serdiff = np.abs(ser1[(s1-matchlen):(s1+matchlen)]
+                             -ser2[(s2+s2off-matchlen):(s2+s2off+matchlen)])
+            serdiff = binary_opening(serdiff<1, np.ones(matchlen))
+            if serdiff[matchlen]:
+                s2 += s2off
+                pairs.append([s1, s2])
+                break
+
+    pairs = np.array(pairs) - matchlen - 1
+    return pairs

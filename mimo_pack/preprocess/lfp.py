@@ -4,10 +4,11 @@
 
 import os
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from scipy.signal import butter, filtfilt
-
-from ..fileio.spikeglx import read_meta, get_meta_path
+from dclut import create_dclut
+from ..fileio.spikeglx import read_meta, get_chanmap, get_geommap
 
 def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp'):
     """
@@ -98,6 +99,55 @@ def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp'):
     lfpf.close()
     return lfp_path
 
+def dclut_from_meta_lfp(lfp_path, dcl_path=None, lfp_fs=1000):
+    """
+    Create a dclut json file from the .meta file associated with a SpikeGLX. bin file
+    that has been converted to LFP.
+
+    Parameters
+    ----------
+    lfp_path : str
+        Path to the LFP binary file
+    
+    Optional
+    --------
+    dcl_path : str
+        Path to save the dclut json file. If not provided, the file will be saved in
+        the same directory as the binary file with the same name but with a .dclut extension.
+    
+    Returns
+    -------
+    dcl_path : str
+        Path to the dclut json file
+    """
+    
+    bin_path = lfp_path.replace('.lfp.bin', '.ap.bin')
+    meta = read_meta(bin_path)
+    chmap = get_chanmap(bin_path)
+    
+    chan_num = meta['nSavedChans']
+
+    gmap = get_geommap(bin_path)
+    chan_props = chmap.merge(gmap, left_index=True, right_index=True, how='outer')
+    scales = [{'name': 'time', 'dim': 0, 'unit': 'seconds', 
+                'type': 'linear', 'val': [1/lfp_fs, 0]}, 
+                {'name': 'channel', 'dim': 1, 'unit': 'none', 
+                'type': 'index', 'val': None}, 
+                {'name': 'ch_name', 'dim': 1, 'unit': 'none', 
+                'type': 'list', 'val': chan_props['name'].values}, 
+                {'name': 'ch_order', 'dim': 1, 'unit': 'none', 
+                'type': 'list', 'val': chan_props['order'].values}, 
+                {'name': 'ch_x', 'dim': 1, 'unit': 'um', 
+                'type': 'list', 'val': chan_props['x'].values}, 
+                {'name': 'ch_y', 'dim': 1, 'unit': 'um', 
+                'type': 'list', 'val': chan_props['y'].values}, 
+                {'name': 'ch_shank', 'dim': 1, 'unit': 'none', 
+                'type': 'list', 'val': chan_props['shank'].values}]
+
+    dcl_path = create_dclut(lfp_path, [-1, chan_num], dcl_path=dcl_path, 
+                            dtype='int16', data_name='data', data_unit='au', 
+                            scales = scales)
+    return dcl_path
 
 def calc_lfp(raw_data, fs, lfp_cutoff=500, down_factor=30, offset=0,
              ignore_chans=[]):
