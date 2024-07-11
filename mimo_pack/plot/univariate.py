@@ -5,7 +5,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def violinplot_log(dataset, axes=None, **kwargs):
+def violinplot_log(dataset, ax=None, **kwargs):
     """
     Create a violin plot of the dataset with a log scale on the y-axis.
     
@@ -23,10 +23,8 @@ def violinplot_log(dataset, axes=None, **kwargs):
     """
 
     # create a new figure if axes are not provided
-    if axes is None:
+    if ax is None:
         fig, ax = plt.subplots()
-    else:
-        ax = axes
 
     # log transfom the data
     # get range of data values, set min and max to nearest power of 10
