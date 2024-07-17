@@ -10,7 +10,7 @@ from scipy.signal import butter, filtfilt
 from dclut import create_dclut
 from ..fileio.spikeglx import read_meta, get_chanmap, get_geommap
 
-def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp'):
+def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp', verbose=False):
     """
     Makes LFP file from raw SpikeGLX binary. Overwrites existing LFP file.
 
@@ -24,6 +24,11 @@ def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp'):
         Sampling frequency of LFP data in Hz. Default is 1000 Hz.
     suffix : str, optional
         Suffix for LFP file. Default is 'lfp'.
+
+    Optional
+    --------
+    verbose : bool, optional
+        If True, print progress. Default is True.
 
     Returns
     -------
@@ -76,8 +81,13 @@ def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp'):
     # downsampled LFP time points to keep
     lfp_keep = np.arange(0, bin_dur, down_factor).astype(np.int64)
 
+    if verbose:
+        iter_chunks = tqdm(range(len(chunks)-1))
+    else:
+        iter_chunks = range(len(chunks)-1)
+    
     # iterate through chunks
-    for i in tqdm(range(len(chunks)-1)):
+    for i in iter_chunks:
         # read in chunk of data
         binf.seek(chunks[i]*step_bytes)
         chunk_len = chunks[i+1]-chunks[i]
@@ -113,13 +123,16 @@ def dclut_from_meta_lfp(lfp_path, dcl_path=None, lfp_fs=1000):
     --------
     dcl_path : str
         Path to save the dclut json file. If not provided, the file will be saved in
-        the same directory as the binary file with the same name but with a .dclut extension.
+        the same directory as the binary file with the same name but with a _dclut.json extension.
     
     Returns
     -------
     dcl_path : str
         Path to the dclut json file
     """
+    
+    if dcl_path is None:
+        dcl_path = lfp_path.replace('.bin', '_dclut.json')
     
     bin_path = lfp_path.replace('.lfp.bin', '.ap.bin')
     meta = read_meta(bin_path)
