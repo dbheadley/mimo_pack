@@ -5,11 +5,12 @@ Author: Drew B. Headley
 import pynapple as nap
 import pandas as pd
 import numpy as np
+import dclut as dcl
 import sys
 import os
 
 
-def as_pynapple(phy_dir, time_file=None, suffix=""):
+def as_pynapple(phy_dir, dcl_file=None, suffix=""):
     """
     Loads spike times from Phy formatted files as a pynapple time series group
     
@@ -17,11 +18,11 @@ def as_pynapple(phy_dir, time_file=None, suffix=""):
     ----------
     phy_dir : string
         path to the directory holding the Phy files
-    time_file : string
-        full file path to a binary file of time steps. Assumes times are stored
-        as a flat array of doubles. Used when just dividing time index by sample
-        rate will not suffice and explicit time points are required because 
-        multiple files had to be synchronized with each other.
+    dcl_file : string
+        full file path to a dclut json file with a 'time' scale. Used when 
+        just dividing time index by sample rate will not suffice and 
+        explicit time points are required because multiple files had to be 
+        synchronized with each other.
     suffix : string
         suffix to add to the end of file names when loading files.
     
@@ -55,17 +56,30 @@ def as_pynapple(phy_dir, time_file=None, suffix=""):
 
     # if time dat file is present, use it to establish timing
     explicit_times = False
-    if time_file is not None:
-        if os.path.isfile(time_file):
-            time_list = np.fromfile(time_file, dtype="double", count=-1)
+    if dcl_file is not None:
+        if os.path.isfile(dcl_file):
+            time_dcl = dcl.dclut(dcl_file)
+            time_arr = time_dcl.scale_values('time')
             explicit_times = True
         else:
-            raise RuntimeError("Cannot find {}".format(time_file))
+            raise RuntimeError("Cannot find {}".format(dcl_file))
 
     # define the beginning and end of the session
     if explicit_times:
-        sess_start = time_list[0]
-        sess_end = time_list[-1]
+        # find first entry in time_arr that is nan
+        if np.isnan(time_arr[0]):
+            start_ind = np.where(np.diff(np.isnan(time_arr))<0)[0][0]
+        else:
+            start_ind = 0
+        
+        # find last entry in time_arr that is nan
+        if np.isnan(time_arr[-1]):
+            end_ind = np.where(np.diff(np.isnan(time_arr))>0)[0][0]
+        else:
+            end_ind = time_arr.size - 1
+
+        sess_start = time_arr[start_ind]
+        sess_end = time_arr[end_ind]
     else:
         sess_start = 0
         sess_end = spk_times.max() / samp_rate
@@ -75,7 +89,18 @@ def as_pynapple(phy_dir, time_file=None, suffix=""):
     spk_dict = {}
     for id in clu_id_list:
         if explicit_times:
-            curr_spk_times = time_list[spk_times[clu_ids == id]]
+            curr_spk_inds = np.sort(spk_times[clu_ids == id])
+            
+            # remove spikes with indices outside of the session
+            curr_spk_inds = curr_spk_inds[curr_spk_inds >= start_ind]
+            curr_spk_inds = curr_spk_inds[curr_spk_inds <= end_ind]
+
+            # convert spike indices to times
+            curr_spk_times = time_arr[curr_spk_inds]
+
+            # remove spike times that are undefined (nan)
+            curr_spk_times = curr_spk_times[~np.isnan(curr_spk_times)]
+
         else:
             curr_spk_times = spk_times[clu_ids == id] / samp_rate
         spk_dict[id] = nap.Ts(curr_spk_times, time_units="s", time_support=sess_set)
