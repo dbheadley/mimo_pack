@@ -19,10 +19,11 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
     phy_dir : string
         path to the directory holding the Phy files
     dcl_file : string
-        full file path to a dclut json file with a 'time' scale. Used when 
-        just dividing time index by sample rate will not suffice and 
+        full file path to a dclut json file with a 'time', 'ch_x', and 'ch_y' scale. 
+        Used when just dividing time index by sample rate will not suffice and 
         explicit time points are required because multiple files had to be 
-        synchronized with each other.
+        synchronized with each other. The dclut file will also be used to determine
+        the mean spike waveform and spike peak location (based on 'ch_x' and 'ch_y').
     suffix : string
         suffix to add to the end of file names when loading files.
     
@@ -58,8 +59,8 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
     explicit_times = False
     if dcl_file is not None:
         if os.path.isfile(dcl_file):
-            time_dcl = dcl.dclut(dcl_file)
-            time_arr = time_dcl.scale_values('time')
+            spks_dcl = dcl.dclut(dcl_file)
+            time_arr = spks_dcl.scale_values('time')
             explicit_times = True
         else:
             raise RuntimeError("Cannot find {}".format(dcl_file))
@@ -87,6 +88,7 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
 
     # assign spikes to clusters and create time series group
     spk_dict = {}
+    spk_inds_dict = {}
     for id in clu_id_list:
         if explicit_times:
             curr_spk_inds = np.sort(spk_times[clu_ids == id])
@@ -103,51 +105,62 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
 
         else:
             curr_spk_times = spk_times[clu_ids == id] / samp_rate
+
+        spk_inds_dict[id] = curr_spk_inds # for waveform extraction
         spk_dict[id] = nap.Ts(curr_spk_times, time_units="s", time_support=sess_set)
     spks = nap.TsGroup(spk_dict)
+
+    # if dcl_file provided, get mean spike waveform and peak channel coordinates
+    if dcl_file is not None:
+        wave_list = []
+        samp_num = 100
+        ind_max = spks_dcl.dcl['file']['shape'][0]
+        wave_win = np.array([[-30], [60]])
+        x_pos = spks_dcl.scale_values(scale='ch_x')
+        y_pos = spks_dcl.scale_values(scale='ch_y')
+        for id in clu_id_list:
+            spks_dcl.reset()
+
+            spk_inds = spk_inds_dict[id]
+            spk_inds = spk_inds[spk_inds < (ind_max-60)]
+            spk_inds = spk_inds[spk_inds > 30]
+            num_spks = spk_inds.size
+
+            if num_spks > samp_num:
+                spk_inds = np.sort(np.random.choice(spk_inds, samp_num))
+
+            # get spike waveforms
+            spks_dcl.intervals({'s0': (spk_inds+wave_win).T}, select_mode='split')
+            waves = np.stack(spks_dcl.read(), axis=2)
+
+            # get mean spike waveform
+            waves = waves - waves[0,:,:] # subtract baseline from each spike
+            mean_wave = np.mean(waves, axis=2)
+
+            # identify 8 channels near where the spike waveform is largest
+            wave_amp = np.linalg.norm(mean_wave, axis=0)
+            peak_ind = np.argsort(wave_amp)[-1]
+            peak_dists = (x_pos - x_pos[peak_ind])**2 + (y_pos - y_pos[peak_ind])**2
+            near_inds = np.argsort(peak_dists)[:8]
+            near_inds = near_inds[np.argsort(wave_amp[near_inds])] # sort near channels by spike amplitude
+            waveform = mean_wave[:, near_inds]
+            x_near = x_pos[near_inds]
+            y_near = y_pos[near_inds]
+
+            wave_list.append({'waveform': waveform, 'inds': near_inds, 
+                              'x': x_near, 'y': y_near})
+
+    spks.set_info(waveform=wave_list)
+    spks.set_info(x=[w['x'][-1] for w in wave_list])
+    spks.set_info(y=[w['y'][-1] for w in wave_list])
+
 
     # add cluster class to the spike group
     group_fpath = os.path.join(phy_dir, "cluster_group{}.tsv".format(suffix))
     if os.path.isfile(group_fpath):
         clu_group = pd.read_csv(group_fpath, sep="\t", index_col="cluster_id")
-        print(clu_group)
         spks.set_info(clu_group)
     
-    # if a cluster properties file is present, add the cluster properties
-    # to the spike group
-    prop_fpath = os.path.join(phy_dir, "cluster_props.tsv")
-    if os.path.isfile(prop_fpath):
-        fpaths["pos"] = os.path.join(phy_dir, "channel_positions.npy")
-        fpaths["map"] = os.path.join(phy_dir, "channel_map.npy")
-        chan_map = np.load(fpaths["map"])
-        chan_pos = np.load(fpaths["pos"])
-        clu_props = pd.read_csv(prop_fpath, sep="\t", index_col="cluster_id")
-        clu_props["x_pos"] = clu_props["peak_chan"].map(
-            lambda x: chan_pos[np.flatnonzero(chan_map == x), 0].item()
-        )
-        clu_props["y_pos"] = clu_props["peak_chan"].map(
-            lambda x: chan_pos[np.flatnonzero(chan_map == x), 1].item()
-        )
-        spks.set_info(clu_props)
-
-    # if a templates file is present, add the spike template to the spike group
-    tplt_fpath = os.path.join(phy_dir, "templates{}.npy".format(suffix))
-    if os.path.isfile(tplt_fpath):
-        spk_waves = np.load(tplt_fpath)
-        spk_waves = [
-            np.squeeze(x) for x in np.split(spk_waves, spk_waves.shape[0], axis=0)
-        ]
-
-        # full spike waveform template
-        spks.set_info(full_wave=pd.Series(spk_waves, index=clu_id_list))
-
-        # peak channel spike waveform
-        peak_waves = [
-            x[:, np.flatnonzero(chan_map == y)].T
-            for x, y in zip(spk_waves, spks.get_info("peak_chan").values)
-        ]
-        spks.set_info(peak_wave=pd.Series(peak_waves, index=clu_id_list))
-
     return spks
 
 
