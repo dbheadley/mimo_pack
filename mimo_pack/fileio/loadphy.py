@@ -110,6 +110,13 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
         spk_dict[id] = nap.Ts(curr_spk_times, time_units="s", time_support=sess_set)
     spks = nap.TsGroup(spk_dict)
 
+    # add cluster class to the spike group
+    group_fpath = os.path.join(phy_dir, "cluster_group{}.tsv".format(suffix))
+    if os.path.isfile(group_fpath):
+        clu_group = pd.read_csv(group_fpath, sep="\t", index_col="cluster_id")
+        clu_group = clu_group.rename(columns={'SASLabel': 'class'})
+        spks.set_info(clu_group)
+    
     # if dcl_file provided, get mean spike waveform and peak channel coordinates
     if dcl_file is not None:
         wave_list = []
@@ -134,7 +141,7 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
             waves = np.stack(spks_dcl.read(), axis=2)
 
             # get mean spike waveform
-            waves = waves - waves[0,:,:] # subtract baseline from each spike
+            waves = waves - np.linspace(waves[0,:,:], waves[-1,:,:], 90) # subtract trend baseline from each spike
             mean_wave = np.mean(waves, axis=2)
 
             # identify 8 channels near where the spike waveform is largest
@@ -150,16 +157,11 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
             wave_list.append({'waveform': waveform, 'inds': near_inds, 
                               'x': x_near, 'y': y_near})
 
-    spks.set_info(waveform=wave_list)
     spks.set_info(x=[w['x'][-1] for w in wave_list])
     spks.set_info(y=[w['y'][-1] for w in wave_list])
+    spks.set_info(waveform=wave_list)
 
-
-    # add cluster class to the spike group
-    group_fpath = os.path.join(phy_dir, "cluster_group{}.tsv".format(suffix))
-    if os.path.isfile(group_fpath):
-        clu_group = pd.read_csv(group_fpath, sep="\t", index_col="cluster_id")
-        spks.set_info(clu_group)
+    
     
     return spks
 
