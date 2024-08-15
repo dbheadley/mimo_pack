@@ -115,6 +115,7 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
     if os.path.isfile(group_fpath):
         clu_group = pd.read_csv(group_fpath, sep="\t", index_col="cluster_id")
         clu_group = clu_group.rename(columns={'SASLabel': 'class'})
+        clu_group = clu_group.sort_index()
         spks.set_info(clu_group)
     
     # if dcl_file provided, get mean spike waveform and peak channel coordinates
