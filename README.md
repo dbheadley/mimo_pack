@@ -17,7 +17,7 @@ where `PROJECT_NAME` is the name you want to give to the environment. You should
 Upon completion, a conda environment named `PROJECT_NAME` is created that can be used as starting point for your own project. Additional packages can be added to it as needed [(e.g. see here)](https://stackoverflow.com/questions/33680946/how-to-add-package-to-conda-environment-without-pip).
 
 Once the environment is created, activate it with the command:
-> conda activate mimo_env
+> conda activate PROJECT_NAME
 
 and then run the following command to make the code base accesible:
 > pip install -e .
