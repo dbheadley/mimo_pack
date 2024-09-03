@@ -3,12 +3,133 @@
 # Created: 2024-05-19
 
 import os
+import shutil
 import numpy as np
 import pandas as pd
+import dclut as dcl
 from tqdm import tqdm
 from scipy.signal import butter, filtfilt
 from dclut import create_dclut
 from ..fileio.spikeglx import read_meta, get_chanmap, get_geommap
+from ..math.curvefitting import piecewise_table_monotonic
+
+def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=500, lfp_fs=1000, sync = {'channel': [384]},
+                        time_scale='time', verbose=False):
+    """
+    Makes LFP file from binary with a dclut metadata file. Overwrites existing LFP file.
+
+    Parameters
+    ----------
+    dcl_path : str
+        Path to dclut file.
+    lfp_path : str
+        Path to use when saving the LFP binary file. The corresponding dclut file will be saved with
+        the same name but with a _dclut.json extension.
+
+    Optional
+    --------
+    lfp_cutoff : numeric
+        Cutoff frequency for low-pass filter in Hz. Default is 500 Hz.
+    lfp_fs : numeric
+        Sampling frequency of LFP data in Hz. Default is 1000 Hz.
+    sync : dict
+        Dictionary that can be passed to dclut with the channel number 
+        for the sync signal. If no sync signal is present, give as
+        None. Default is {'channel': [384]}.
+    time_scale : str
+        Name of the time scale in the dclut file. Default is 'time'.
+    verbose : bool
+        If True, print progress. Default is False.
+
+    Returns
+    -------
+    lfp_dcl_path : str
+        Path to LFP dclut file.
+    """
+
+    # Check if the binary file exists
+    if not os.path.exists(dcl_path):
+        raise FileNotFoundError('Dclut file {} not found'.format(dcl_path))
+    
+    if sync is None:
+        sync_chan = []
+    else:
+        sync_chan = sync['channel']
+
+    # Create dclut object for reading binary data
+    dcl_data = dcl.dclut(dcl_path)
+    times = dcl_data.scale_values(time_scale)
+    time_dim = dcl_data.dcl['scales'][time_scale]['dim']
+    ind_scale = 's' + str(time_dim)
+    ind_len = dcl_data.shape[time_dim]
+
+    # determine which time points to keep for downsampling
+    fs = np.round(1/np.nanmedian(np.diff(times))).astype(int)
+    keep_step = int(fs/lfp_fs)
+    down_inds = np.arange(0, ind_len, keep_step)
+    chunks = range(0, ind_len, fs*60)
+    if chunks[-1] != ind_len:
+        chunks = np.append(chunks, ind_len)
+    
+    # initialize binary data to write
+    lfpf = open(lfp_path, mode='wb')
+
+    if verbose:
+        iter_chunks = tqdm(range(len(chunks)-1))
+    else:
+        iter_chunks = range(len(chunks)-1)
+    
+    # iterate through chunks and write out to LFP file
+    lfp_times = []
+    for i in iter_chunks:
+        # read in chunk of data
+        dcl_data.reset()
+
+        # include a buffer of 1sec time points on either side of the chunk
+        # to minimize filtering edge effects
+        if chunks[i]-fs > 0:
+            low_edge = fs
+        else:
+            low_edge = 0
+        
+        if chunks[i+1]+fs < ind_len:
+            high_edge = fs
+        else:
+            high_edge = 0
+        
+        dcl_data.intervals({ind_scale: [chunks[i]-low_edge, chunks[i+1]+high_edge-1]})
+        bin_data = dcl_data.read(format='xarray')[0]
+        chunk_times = bin_data[time_scale].values
+        chunk_inds = bin_data[ind_scale].values
+
+        if len(chunk_times) > 10:
+            # calculate LFP
+            lfp_data = calc_lfp(bin_data.data, fs, lfp_cutoff=lfp_cutoff, 
+                                down_factor=1, offset=0, ignore_chans=sync_chan)
+            
+            # remove buffer time points
+            lfp_data = lfp_data[low_edge:-(high_edge-1),:]
+            chunk_times = chunk_times[low_edge:-(high_edge-1)]
+            chunk_inds = chunk_inds[low_edge:-(high_edge-1)]
+
+            # lfp data to keep for downsampling
+            down_bool = np.where(np.isin(chunk_inds, down_inds))[0]
+            lfp_data = lfp_data[down_bool,:]
+            lfp_times.append(chunk_times[down_bool])
+            lfpf.write(lfp_data.tobytes())
+    lfpf.close()
+
+    # write new dclut file for the LFP by copying the original and changing the time fields
+    lfp_dcl_path = lfp_path.replace('.bin', '_dclut.json')
+    lfp_times = np.concatenate(lfp_times).flatten()
+    dcl_data.reset()
+    dcl_data.dcl['file']['name'] = lfp_path
+    dcl_data.dcl['file']['shape'][time_dim] = len(lfp_times)
+    dcl_data.dcl['scales'][time_scale]['type'] = 'table'
+    dcl_data.dcl['scales'][time_scale]['values'] = piecewise_table_monotonic(lfp_times)
+    dcl_data.save(path=lfp_dcl_path)
+    
+    return lfp_path
 
 def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp', verbose=False):
     """
@@ -18,16 +139,17 @@ def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp', 
     ----------
     bin_path : str
         Path to binary file.
-    lfp_cutoff : numeric, optional
-        Cutoff frequency for low-pass filter in Hz. Default is 500 Hz.
-    lfp_fs : numeric, optional
-        Sampling frequency of LFP data in Hz. Default is 1000 Hz.
-    suffix : str, optional
-        Suffix for LFP file. Default is 'lfp'.
+    
 
     Optional
     --------
-    verbose : bool, optional
+    lfp_cutoff : numeric
+        Cutoff frequency for low-pass filter in Hz. Default is 500 Hz.
+    lfp_fs : numeric
+        Sampling frequency of LFP data in Hz. Default is 1000 Hz.
+    suffix : str
+        Suffix for LFP file. Default is 'lfp'.
+    verbose : bool
         If True, print progress. Default is True.
 
     Returns
@@ -93,7 +215,6 @@ def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp', 
         chunk_len = chunks[i+1]-chunks[i]
         bin_data = np.fromfile(binf, dtype='int16', count=chunk_len*chan_num)
         bin_data = bin_data.reshape((chunk_len, chan_num))
-        lfp_data = bin_data.copy()
 
         # offset is the first index in lfp_keep that is greater than or 
         # equal to chunks[i]

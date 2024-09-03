@@ -69,13 +69,13 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
     if explicit_times:
         # find first entry in time_arr that is nan
         if np.isnan(time_arr[0]):
-            start_ind = np.where(np.diff(np.isnan(time_arr))<0)[0][0]
+            start_ind = np.where(np.diff(np.isnan(time_arr).astype(int))<0)[0][0]+1
         else:
             start_ind = 0
         
         # find last entry in time_arr that is nan
         if np.isnan(time_arr[-1]):
-            end_ind = np.where(np.diff(np.isnan(time_arr))>0)[0][0]
+            end_ind = np.where(np.diff(np.isnan(time_arr).astype(int))>0)[0][0]
         else:
             end_ind = time_arr.size - 1
 
