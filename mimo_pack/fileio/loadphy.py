@@ -156,13 +156,10 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
 
             wave_list.append({'waveform': waveform, 'inds': near_inds, 
                               'x': x_near, 'y': y_near})
+        spks.set_info(x=[w['x'][-1] for w in wave_list])
+        spks.set_info(y=[w['y'][-1] for w in wave_list])
+        spks.set_info(waveform=wave_list)
 
-    spks.set_info(x=[w['x'][-1] for w in wave_list])
-    spks.set_info(y=[w['y'][-1] for w in wave_list])
-    spks.set_info(waveform=wave_list)
-
-    
-    
     return spks
 
 
