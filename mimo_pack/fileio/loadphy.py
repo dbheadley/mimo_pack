@@ -90,9 +90,8 @@ def as_pynapple(phy_dir, dcl_file=None, suffix=""):
     spk_dict = {}
     spk_inds_dict = {}
     for id in clu_id_list:
-        if explicit_times:
-            curr_spk_inds = np.sort(spk_times[clu_ids == id])
-            
+        curr_spk_inds = np.sort(spk_times[clu_ids == id])
+        if explicit_times:    
             # remove spikes with indices outside of the session
             curr_spk_inds = curr_spk_inds[curr_spk_inds >= start_ind]
             curr_spk_inds = curr_spk_inds[curr_spk_inds <= end_ind]
