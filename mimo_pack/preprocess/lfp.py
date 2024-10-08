@@ -131,7 +131,7 @@ def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=500, lfp_fs=1000, sync = 
     
     return lfp_path
 
-def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp', verbose=False):
+def make_lfp_file_spikeglx(bin_path, lfp_cutoff=200, lfp_fs=1000, suffix='lfp', verbose=False):
     """
     Makes LFP file from raw SpikeGLX binary. Overwrites existing LFP file.
 
@@ -144,7 +144,7 @@ def make_lfp_file_spikeglx(bin_path, lfp_cutoff=500, lfp_fs=1000, suffix='lfp', 
     Optional
     --------
     lfp_cutoff : numeric
-        Cutoff frequency for low-pass filter in Hz. Default is 500 Hz.
+        Cutoff frequency for low-pass filter in Hz. Default is 200 Hz.
     lfp_fs : numeric
         Sampling frequency of LFP data in Hz. Default is 1000 Hz.
     suffix : str
