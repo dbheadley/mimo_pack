@@ -13,7 +13,7 @@ from dclut import create_dclut
 from ..fileio.spikeglx import read_meta, get_chanmap, get_geommap
 from ..math.curvefitting import piecewise_table_monotonic
 
-def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=500, lfp_fs=1000, sync = {'channel': [384]},
+def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=200, lfp_fs=1000, sync = {'channel': [384]},
                         time_scale='time', verbose=False):
     """
     Makes LFP file from binary with a dclut metadata file. Overwrites existing LFP file.
@@ -29,7 +29,7 @@ def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=500, lfp_fs=1000, sync = 
     Optional
     --------
     lfp_cutoff : numeric
-        Cutoff frequency for low-pass filter in Hz. Default is 500 Hz.
+        Cutoff frequency for low-pass filter in Hz. Default is 200 Hz.
     lfp_fs : numeric
         Sampling frequency of LFP data in Hz. Default is 1000 Hz.
     sync : dict
@@ -283,7 +283,7 @@ def dclut_from_meta_lfp(lfp_path, dcl_path=None, lfp_fs=1000):
                             scales = scales)
     return dcl_path
 
-def calc_lfp(raw_data, fs, lfp_cutoff=500, down_factor=30, offset=0,
+def calc_lfp(raw_data, fs, lfp_cutoff=200, down_factor=30, offset=0,
              ignore_chans=[]):
     """
     Calculate the LFP from raw data.
@@ -295,7 +295,7 @@ def calc_lfp(raw_data, fs, lfp_cutoff=500, down_factor=30, offset=0,
     fs : numeric
         Sampling frequency of the raw data.
     lfp_cutoff : numeric, optional
-        Cutoff frequency for low-pass filter in Hz. Default is 500 Hz.
+        Cutoff frequency for low-pass filter in Hz. Default is 200 Hz.
     down_factor : numeric, optional
         Factor for downsampling the LFP data, i.e. number of skipped
         samples. Default is 30.
