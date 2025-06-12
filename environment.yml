@@ -21,3 +21,4 @@ dependencies:
     - pyabf
     - twine
     - dclut
+    - opencv_python
