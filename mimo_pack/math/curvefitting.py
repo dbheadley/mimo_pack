@@ -134,3 +134,74 @@ def piecewise_table_monotonic(vals, thresh=None):
     return table
 
 
+def exp_knee(x, offset, knee, exp):
+    """
+    Exponential knee function.
+    Based on function from FOOOF package.
+    
+    Parameters
+    ----------
+    x : array-like
+        The x values to evaluate the curve at.
+    offset : float
+        The offset of the curve.
+    knee : float
+        The knee point of the curve.
+    exp : float
+        The exponential factor of the curve.
+        
+    Returns
+    -------
+    y : array-like
+        The y value of the curve at the given x values.
+    """
+    
+    return offset - np.log10(knee + x**exp)
+
+def fit_exp_knee(x, xp, yp, suppress_error=False, **kwargs):
+    """
+    Fit an exponential knee curve to the data.
+    When working with spectral data, x values should
+    be linearly spaced frequencies, and y values should
+    be the log10 power spectral density values.
+
+    Parameters
+    ----------
+    x : array-like
+        The x values to evaluate the curve at.
+    xp : array-like
+        The x values of the data to fit.
+    yp : array-like
+        The y values of the data to fit.
+    suppress_error : bool, optional
+        If True, suppresses errors during fitting. 
+        Default is False, which raises an error if fitting fails.
+    kwargs : dict
+        Additional arguments to pass to curve_fit.
+
+    Returns
+    -------
+    fit : array-like
+        The y values of the curve at the given x values.
+    popt : array-like
+        The optimized parameters of the curve.
+    """
+
+    # initial guess for the parameters
+    if 'p0' not in kwargs:
+        offset_guess = yp[np.where(xp == np.min(xp))[0][0]]
+        knee_guess = 0.1
+        exp_guess = 1.0
+        kwargs['p0'] = [offset_guess, knee_guess, exp_guess]
+
+    if suppress_error:
+        try:
+            popt, _ = curve_fit(exp_knee, xp, yp, **kwargs)
+        except Exception as e:
+            print(f"Error fitting exp_knee: {e}")
+            popt = np.array([np.nan, np.nan, np.nan])
+    else:
+        popt, _ = curve_fit(exp_knee, xp, yp, **kwargs)
+
+    fit = exp_knee(x, *popt)
+    return fit, popt

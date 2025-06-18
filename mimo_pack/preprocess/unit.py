@@ -447,7 +447,7 @@ def pynapple_spikes_qc(spks_pyn, dcl_file, wave_num=1000, ref_period=0.002, snr_
         print("Loading dclut file: {}".format(dcl_file))
     spks_dcl = dcl.dclut(dcl_file)
     times_sess = spks_dcl.scale_values(scale='time')
-    samp_per_ms = np.ceil(((1/np.median(np.diff(times_sess))) / 1000)).astype(np.int64)
+    samp_per_ms = np.ceil(((1/np.nanmedian(np.diff(times_sess))) / 1000)).astype(np.int64)
     wave_win = np.array([[wave_period[0]*samp_per_ms],
                          [wave_period[1]*samp_per_ms]]).astype(np.int64)
     x_pos = spks_dcl.scale_values(scale='ch_x')

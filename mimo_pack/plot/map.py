@@ -126,3 +126,62 @@ def amp_map(amp, x_pos, y_pos, cmap='viridis', ax=None, **kwargs):
                           c=amp, cmap=cmap, **kwargs)
                 
         return ax, scat
+
+def amp_map_xr(amp, x_coord='ch_x', y_coord='ch_y', **kwargs):
+    """
+    Plot a map of amplitude values across channels using xarray coordinates.
+
+    Parameters
+    ----------
+    amp : xarray.DataArray
+        The amplitude values for each channel.
+    x_coord : str, optional
+        The name of the x coordinate in the DataArray (default is 'ch_x').
+    y_coord : str, optional
+        The name of the y coordinate in the DataArray (default is 'ch_y').
+    **kwargs : dict, optional
+        Additional keyword arguments for the scatter plot.
+
+    Returns
+    -------
+    ax: matplotlib.axes.Axes
+        The axes with the amplitude map plotted.
+    scat: matplotlib.collections.PathCollection
+        The scatter plot object.
+    """
+    
+    ax, scat = amp_map(amp.values, amp[x_coord].values, amp[y_coord].values, **kwargs)
+    
+    return ax, scat
+
+def wave_map_xr(waves, x_coord='ch_x', y_coord='ch_y', time_dim='time', **kwargs):
+    """
+    Plot a map of waveforms across channels using xarray coordinates.
+
+    Parameters
+    ----------
+    waves : xarray.DataArray
+        The waveforms for each channel.
+    x_coord : str, optional
+        The name of the x coordinate in the DataArray (default is 'ch_x').
+    y_coord : str, optional
+        The name of the y coordinate in the DataArray (default is 'ch_y').
+    time_dim : str, optional
+        The name of the time dimension in the DataArray (default is 'time').
+    **kwargs : dict, optional
+        Additional keyword arguments for the plot.
+
+    Returns
+    -------
+    ax: matplotlib.axes.Axes
+        The axes with the waveform map plotted.
+    """
+    
+    # get the dimension for the x_coord coordinate
+    ch_dim = waves.coords[x_coord].dims[0]
+    
+    waves = waves.transpose(time_dim, ch_dim)
+    
+    ax = wave_map(waves.data, waves[x_coord].values, waves[y_coord].values, **kwargs)
+    
+    return ax
