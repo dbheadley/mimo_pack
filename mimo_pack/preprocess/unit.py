@@ -450,6 +450,7 @@ def pynapple_spikes_qc(spks_pyn, dcl_file, wave_num=1000, ref_period=0.002, snr_
     samp_per_ms = np.ceil(((1/np.nanmedian(np.diff(times_sess))) / 1000)).astype(np.int64)
     wave_win = np.array([[wave_period[0]*samp_per_ms],
                          [wave_period[1]*samp_per_ms]]).astype(np.int64)
+    
     x_pos = spks_dcl.scale_values(scale='ch_x')
     y_pos = spks_dcl.scale_values(scale='ch_y')
 
@@ -482,8 +483,8 @@ def pynapple_spikes_qc(spks_pyn, dcl_file, wave_num=1000, ref_period=0.002, snr_
 
         # get example spike waveforms
         if spike_num > wave_num:
-            sample_times = np.sort(np.random.choice(times[(times>times_sess[-wave_win[0]]) &
-                                                          (times<times_sess[-wave_win[1]])], 
+            sample_times = np.sort(np.random.choice(times[(times>(start_sess-wave_period[0])) &
+                                                          (times<(end_sess-wave_period[1]))], 
                                                           wave_num))
         else:
             sample_times = times[(times>times_sess[-wave_win[0]]) &
