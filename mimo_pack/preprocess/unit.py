@@ -519,7 +519,7 @@ def pynapple_spikes_qc(spks_pyn, dcl_file, wave_num=1000, ref_period=0.002, snr_
         wave_norm = (peak_wave / np.linalg.norm(peak_wave, axis=0)).flatten()
         wave_2d = waves[:, near_inds, :].transpose((2,0,1))
         wave_amps = np.concatenate([np.linalg.lstsq(wave_norm.reshape(-1,1), 
-                                                        wave.reshape(-1,1))[0] 
+                                                        wave.reshape(-1,1), rcond=-1)[0] 
                                         for wave in wave_2d])
         amp_cut.append(amp_cutoff(wave_amps))
 
