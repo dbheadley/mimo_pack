@@ -58,6 +58,10 @@ def probe_units(spks_nap, jitter=10, labels=True, cmap='viridis',
                c=np.log10(su_meta['rate']), 
                s=su_meta['WaveformSpread']*spread_scale, 
                cmap=cmap, label='SU units', **kwargs)
+    
+    if np.max(mu_meta['x'])- np.min(mu_meta['x']) < 250:
+        ax.set_xlim(np.min(mu_meta['x'])-125, np.max(mu_meta['x'])+125)
+        
     ax.legend()
     cbar = plt.colorbar(ax.collections[1], ax=ax)
     ax.set_aspect('equal')
