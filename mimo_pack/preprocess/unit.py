@@ -487,8 +487,8 @@ def pynapple_spikes_qc(spks_pyn, dcl_file, wave_num=1000, ref_period=0.002, snr_
                                                           (times<(end_sess-(wave_period[1]/1000)))], 
                                                           wave_num))
         else:
-            sample_times = times[(times>times_sess[-wave_win[0]]) &
-                                 (times<times_sess[-wave_win[1]])]
+            sample_times = times[(times>(start_sess-(-wave_period[0]/1000))) &
+                                 (times<(end_sess-(wave_period[1]/1000)))]
         # convert spike times to indices
         sample_inds = np.searchsorted(times_sess, sample_times).astype(np.int64)
         spks_dcl.intervals({'s0': (sample_inds+wave_win).T}, select_mode='split')
