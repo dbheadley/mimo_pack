@@ -79,7 +79,7 @@ def stft_xr(signal, window=1, **kwargs):
     return xr.DataArray(Zxx, dims=dims, coords=new_coords)
 
 
-def wavelet_xr(signal, freqs=np.pow(2,np.arange(0,7,0.25)), wavelet='cmor2.5-1.0',
+def wavelet_xr(signal, freqs=np.power(2,np.arange(0,7,0.25)), wavelet='cmor2.5-1.0',
                remove_dc=True, verbose=True):
     """
     Apply a wavelet transform an xarray signal
@@ -281,8 +281,8 @@ def fit_spectrum_aperiodic_xr(spec, f_range=None, **kwargs):
 
 def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freqs=[52]):
     """
-    Compute 2D histograms of spike phase and amplitude percentiles for each unit grouped by LFP channel,
-    for one or more frequencies.
+    Compute 2D histograms of spike phase and amplitude percentiles for 
+    each unit grouped by LFP channel, for one or more frequencies.
 
     Parameters
     ----------
@@ -298,7 +298,8 @@ def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freqs=[52]):
     Returns
     -------
     pd.Series
-        Series of xarray.DataArray histograms indexed by unit, each with dims ('amplitude', 'phase', 'frequency').
+        Series of xarray.DataArray histograms indexed by unit, 
+        each with dims ('amplitude', 'phase', 'frequency').
     """
     if not isinstance(freqs, (list, np.ndarray)):
         freqs = [freqs]
@@ -358,11 +359,11 @@ def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freqs=[52]):
                     'phase': 0.5 * (ph_edges[:-1] + ph_edges[1:]),
                     'frequency': freqs
                 },
-                name='gamma_hist'
+                name='count'
             )
             hist.append(hist_xr)
 
-        hist_grp.append(pd.Series(hist, index=spk_sel.index, name='gamma_hist'))
+        hist_grp.append(pd.Series(hist, index=spk_sel.index, name='entrainment_hist'))
 
     hist_full = pd.concat(hist_grp)
     hist_full = hist_full.sort_index()
