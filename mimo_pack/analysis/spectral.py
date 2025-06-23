@@ -279,9 +279,10 @@ def fit_spectrum_aperiodic_xr(spec, f_range=None, **kwargs):
 
     return spec_ap
 
-def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freq=52):
+def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freqs=[52]):
     """
-    Compute 2D histograms of spike phase and amplitude percentiles for each unit grouped by LFP channel.
+    Compute 2D histograms of spike phase and amplitude percentiles for each unit grouped by LFP channel,
+    for one or more frequencies.
 
     Parameters
     ----------
@@ -291,38 +292,75 @@ def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freq=52):
         LFP data with channel dimension.
     bins : tuple of int
         Number of bins for amplitude percentile and phase, e.g. (4, 9).
-    freq : float or int
-        Frequency (Hz) to extract from wavelet. Default is 52 Hz.
+    freqs : float, int, or list/array
+        Frequency or frequencies (Hz) to extract from wavelet. Default is [52].
 
     Returns
     -------
     pd.Series
-        Series of 2D histograms indexed by unit.
+        Series of xarray.DataArray histograms indexed by unit, each with dims ('amplitude', 'phase', 'frequency').
     """
+    if not isinstance(freqs, (list, np.ndarray)):
+        freqs = [freqs]
+    freqs = np.array(freqs)
+
     spks_grp = spks.getby_category('lfp_channel')
     hist_grp = []
     for ch in spks_grp:
         spk_sel = spks_grp[ch]
         lfp_ch = lfp.sel(channel=ch)
-        lfp_wave = wavelet_xr(lfp_ch, freqs=[freq])
-        t_dim = np.where(np.array(lfp_wave.dims)=='time')[0][0]
+        lfp_wave = wavelet_xr(lfp_ch, freqs=freqs)
+        t_dim = np.where(np.array(lfp_wave.dims) == 'time')[0][0]
+        f_dim = np.where(np.array(lfp_wave.dims) == 'frequency')[0][0]
         wave_amp, wave_ph = wavelet_phamp_xr(lfp_wave)
 
-        # convert wave_amp to percentiles
+        # convert wave_amp to percentiles along time for each frequency
         wave_amp_pr = wave_amp.copy(deep=True)
-        wave_amp_pr.data = np.argsort(wave_amp.to_numpy(),axis=t_dim) / wave_amp.sizes['time']
+        # argsort twice to get ranks, then normalize to percentiles
+        amp_np = wave_amp.to_numpy()
+        amp_rank = np.apply_along_axis(lambda x: np.argsort(np.argsort(x)), t_dim, amp_np)
+        amp_pr = amp_rank / (amp_np.shape[t_dim] - 1 + 1e-12)
+        wave_amp_pr.data = amp_pr
+
         hist = []
         for spk_i in spk_sel:
             times_i = spk_sel[spk_i].times()
-            amp_pr = wave_amp_pr.sel(time=times_i, method='nearest').to_numpy().flatten()
-            ph = wave_ph.sel(time=times_i, method='nearest').to_numpy().flatten()
+            # Select nearest time points for all frequencies
+            amp_pr_sel = wave_amp_pr.sel(time=times_i, method='nearest').to_numpy()
+            ph_sel = wave_ph.sel(time=times_i, method='nearest').to_numpy()
+            # amp_pr_sel, ph_sel shape: (n_times, n_freqs) or (n_freqs, n_times) depending on dims
+            # Ensure shape is (n_times, n_freqs)
+            if amp_pr_sel.shape[0] != len(times_i):
+                amp_pr_sel = amp_pr_sel.T
+                ph_sel = ph_sel.T
 
-            # remove spikes with amplitude percentile greater than 0.999 to remove outliers
-            mask = amp_pr <= 0.999
-            amp_pr = amp_pr[mask]
-            ph = ph[mask]
-            hist.append(np.histogram2d(amp_pr, ph, bins=bins, 
-                                       range=[[0, 1], [-np.pi, np.pi]])[0])
+            # Remove spikes with amplitude percentile > 0.999 for each frequency
+            hists = []
+            for fi in range(len(freqs)):
+                amp_f = amp_pr_sel[:, fi]
+                ph_f = ph_sel[:, fi]
+                mask = amp_f <= 0.999
+                amp_f = amp_f[mask]
+                ph_f = ph_f[mask]
+                h2d, amp_edges, ph_edges = np.histogram2d(
+                    amp_f, ph_f, bins=bins, range=[[0, 1], [-np.pi, np.pi]]
+                )
+                hists.append(h2d)
+
+            # Stack along frequency dimension
+            hists = np.stack(hists, axis=-1)
+            # Create xarray for this unit: dims (amplitude, phase, frequency)
+            hist_xr = xr.DataArray(
+                hists,
+                dims=('amplitude', 'phase', 'frequency'),
+                coords={
+                    'amplitude': 0.5 * (amp_edges[:-1] + amp_edges[1:]),
+                    'phase': 0.5 * (ph_edges[:-1] + ph_edges[1:]),
+                    'frequency': freqs
+                },
+                name='gamma_hist'
+            )
+            hist.append(hist_xr)
 
         hist_grp.append(pd.Series(hist, index=spk_sel.index, name='gamma_hist'))
 
