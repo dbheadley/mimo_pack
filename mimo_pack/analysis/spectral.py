@@ -2,29 +2,40 @@
 # Author: Drew Headley
 # Date: 2025-06-16
 
+import warnings
+import pywt
 import xarray as xr
 import numpy as np
+import pandas as pd
 import scipy.signal as ss
 from mimo_pack.math.curvefitting import fit_exp_knee, exp_knee
 
 def stft_xr(signal, window=1, **kwargs):
     """
-    Apply Short-Time Fourier Transform (STFT) to an xarray signal and return an xarray with a frequency dimension.
+    Apply Short-Time Fourier Transform (STFT) to an xarray signal 
+    and return an xarray with a frequency dimension.
 
     Parameters
     ----------
     signal : xarray.DataArray
-        1D or 2D xarray signal. Must have a 'time' dimension.
+        Must have a time dimension. STFT will be applied along 
+        this dimension.
     window : float
         Duration (in seconds) of each STFT window. Default is 1 second.
     kwargs : dict, optional
-        Additional arguments to pass to scipy.signal.stft (e.g., nperseg, noverlap, etc.).
+        Additional arguments to pass to scipy.signal.stft 
+        (e.g., nperseg, noverlap, etc.).
 
     Returns
     -------
     xarray.DataArray
-        STFT result with same non-time dimensions as input, 'frequency' and new 'stft_time' dimensions.
+        STFT result with same non-time dimensions and an added 
+        'frequency' dimension.
     """
+
+    if 'time' not in signal.dims:
+        raise ValueError("Input xarray must have a 'time' dimension.")
+    
     if not isinstance(window, np.ndarray):
         window = np.array([window])
 
@@ -33,9 +44,9 @@ def stft_xr(signal, window=1, **kwargs):
     dt = np.nanmedian(np.diff(time))
     fs = 1.0 / dt
 
-    arr = signal.values
-    if arr.ndim == 1:
-        arr = arr[:, None]
+    arr = signal.to_numpy()
+    dims = signal.dims
+    time_axis = np.where(np.array(dims) == 'time')[0][0]
 
     hop = int(window * fs)
     mfft = kwargs.get('mfft', int(window * fs))
@@ -45,12 +56,13 @@ def stft_xr(signal, window=1, **kwargs):
     stft = ss.ShortTimeFFT(win_func, hop, fs, **kwargs)
     
     f = stft.f
-    t = stft.t(arr.shape[0])
-    #Zxx = np.zeros((f.size, t.size, arr.shape[1]))
-    Zxx = stft.spectrogram(arr, axis=0)
+    t = stft.t(arr.shape[time_axis])
+
+    Zxx = stft.spectrogram(arr, axis=time_axis)
         
-    # rearrange spectrogram array to have time, channel, frequency organization
-    Zxx = np.transpose(Zxx, [2, 1, 0])
+    # rearrange spectrogram array to have
+    # original dimenions and with frequency last
+    Zxx = Zxx.swapaxes(-1,time_axis)
 
     # Prepare output dims and coords
     dims = list(signal.dims)
@@ -58,12 +70,129 @@ def stft_xr(signal, window=1, **kwargs):
 
     # Fix time coordinates and add frequency
     coords = dict(signal.coords)
-    new_coords = {key: values for key, values in coords.items() if values.dims != ('time',)}
+    new_coords = {key: values for key, values in coords.items() 
+                  if values.dims != ('time',)}
     new_coords['frequency'] = f
     new_coords['time'] = t
-    new_coords['s0'] = ('time', np.arange(Zxx.shape[0]))
+    new_coords['s0'] = ('time', np.arange(Zxx.shape[time_axis]))
 
     return xr.DataArray(Zxx, dims=dims, coords=new_coords)
+
+
+def wavelet_xr(signal, freqs=np.pow(2,np.arange(0,7,0.25)), wavelet='cmor2.5-1.0',
+               remove_dc=True, verbose=True):
+    """
+    Apply a wavelet transform an xarray signal
+
+    Parameters
+    ----------
+    signal : xarray.DataArray
+        Must have a 'time' dimension.
+    freqs : np.ndarray, optional
+        Frequencies to use for the wavelet transform. 
+        Default is from 1 to 128 Hz on a logarithmic scale.
+    wavelet : str, optional
+        Wavelet type to use for the transform.
+        Default is 'cmor2.5-1.0' (complex Morlet wavelet).
+    remove_dc : bool, optional
+        Whether to remove the DC offset from the signal before
+        applying the wavelet transform. Default is True.
+    verbose : bool, optional
+        Whether to print warnings about the size of the resulting
+        wavelet transform. Default is True.
+
+    Returns
+    -------
+    xarray.DataArray
+        wavelet result with same non-time dimensions and an 
+        added 'frequency' dimension appended.
+    """
+
+    if 'time' not in signal.dims:
+        raise ValueError("Input xarray must have a 'time' dimension.")
+    
+    if not isinstance(freqs, np.ndarray):
+        freqs = np.array(freqs)
+
+    # calculate size of the resulting array from the wavelet transform
+    # an give a warning if the size exceeds 20 GB
+    est_size = (signal.size * freqs.size * 
+                np.dtype(np.complex64).itemsize) / 1e9  # in GB
+    if verbose and est_size > 20:
+        warnings.warn(f"The resulting wavelet transform will be {est_size} GB.", 
+                      UserWarning)
+
+    # Extract time and sampling frequency
+    time = signal['time'].values
+    dt = np.nanmedian(np.diff(time))
+    fs = 1.0 / dt
+
+    arr = signal.to_numpy()
+    dims = signal.dims
+
+    time_axis = np.where(np.array(dims) == 'time')[0][0]
+
+    # Create a continuous wavelet transform object
+    # We will use the complex Morlet wavelet
+    w = pywt.ContinuousWavelet(wavelet)
+
+    # convert frequencies to scales
+    scales = pywt.frequency2scale(w, freqs) * fs 
+
+    # remove DC offset to minimize edge effects
+    if remove_dc:
+        arr = arr - np.mean(arr, axis=time_axis, keepdims=True) 
+
+    # Continuous wavelet transform
+    Wxx, _ = pywt.cwt(arr, scales, w, sampling_period=dt, 
+                      axis=time_axis, method='fft')
+        
+    # rearrange spectrogram array to have original organization,
+    # and with frequency last
+    Wxx = Wxx.transpose(np.roll(np.arange(Wxx.ndim), -1))
+
+    # Prepare output dims and coords
+    dims = list(signal.dims)
+    dims = dims + ['frequency']
+
+    # Fix time coordinates and add frequency
+    new_coords = dict(signal.coords)
+    new_coords['frequency'] = freqs
+
+    return xr.DataArray(Wxx, dims=dims, coords=new_coords)
+
+
+def wavelet_phamp_xr(wavelet):
+    """
+    Calculate the phase and amplitude of a wavelet transform stored as an xarray.DataArray.
+
+    Parameters
+    ----------
+    wavelet : xarray.DataArray
+        Wavelet transform with a 'frequency' dimension and other dimensions to broadcast over.
+
+    Returns
+    -------
+    amplitude_xr : xarray.DataArray
+        Amplitude of the wavelet transform, with same shape as input.
+    phase_xr : xarray.DataArray
+        Phase of the wavelet transform, with same shape as input.
+    """
+
+    # Check that 'frequency' dimension exists
+    if 'frequency' not in wavelet.dims:
+        raise ValueError("Input xarray must have a 'frequency' dimension.")
+
+    # Calculate phase and amplitude
+    wave = wavelet.to_numpy()
+    phase = np.angle(wave)
+    amplitude = np.abs(wave)
+
+    # Create DataArrays for phase and amplitude
+    phase_xr = xr.DataArray(phase, dims=wavelet.dims, coords=wavelet.coords)
+    amplitude_xr = xr.DataArray(amplitude, dims=wavelet.dims, coords=wavelet.coords)
+
+    return amplitude_xr, phase_xr
 
 
 def fit_spectrum_aperiodic(freqs, spec, f_range=None, **kwargs):
@@ -149,3 +278,54 @@ def fit_spectrum_aperiodic_xr(spec, f_range=None, **kwargs):
     )
 
     return spec_ap
+
+def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freq=52):
+    """
+    Compute 2D histograms of spike phase and amplitude percentiles for each unit grouped by LFP channel.
+
+    Parameters
+    ----------
+    spks : pynapple.TsGroup
+        Spike units object with 'lfp_channel' metadata field.
+    lfp : xarray.DataArray
+        LFP data with channel dimension.
+    bins : tuple of int
+        Number of bins for amplitude percentile and phase, e.g. (4, 9).
+    freq : float or int
+        Frequency (Hz) to extract from wavelet. Default is 52 Hz.
+
+    Returns
+    -------
+    pd.Series
+        Series of 2D histograms indexed by unit.
+    """
+    spks_grp = spks.getby_category('lfp_channel')
+    hist_grp = []
+    for ch in spks_grp:
+        spk_sel = spks_grp[ch]
+        lfp_ch = lfp.sel(channel=ch)
+        lfp_wave = wavelet_xr(lfp_ch, freqs=[freq])
+        t_dim = np.where(np.array(lfp_wave.dims)=='time')[0][0]
+        wave_amp, wave_ph = wavelet_phamp_xr(lfp_wave)
+
+        # convert wave_amp to percentiles
+        wave_amp_pr = wave_amp.copy(deep=True)
+        wave_amp_pr.data = np.argsort(wave_amp.to_numpy(),axis=t_dim) / wave_amp.sizes['time']
+        hist = []
+        for spk_i in spk_sel:
+            times_i = spk_sel[spk_i].times()
+            amp_pr = wave_amp_pr.sel(time=times_i, method='nearest').to_numpy().flatten()
+            ph = wave_ph.sel(time=times_i, method='nearest').to_numpy().flatten()
+
+            # remove spikes with amplitude percentile greater than 0.999 to remove outliers
+            mask = amp_pr <= 0.999
+            amp_pr = amp_pr[mask]
+            ph = ph[mask]
+            hist.append(np.histogram2d(amp_pr, ph, bins=bins, 
+                                       range=[[0, 1], [-np.pi, np.pi]])[0])
+
+        hist_grp.append(pd.Series(hist, index=spk_sel.index, name='gamma_hist'))
+
+    hist_full = pd.concat(hist_grp)
+    hist_full = hist_full.sort_index()
+    return hist_full
