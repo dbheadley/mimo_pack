@@ -47,13 +47,16 @@ def probe_layout(probe_dcl, chan_names=True, ax=None, scat_args={}, text_args={}
 
     # create a scatter plot of the electrode positions
     ax.scatter(x_pos, y_pos, **scat_args)
-    ax.set_aspect('equal')
     
     # plot the electrode numbers
     if chan_names:
         for i, (x, y) in enumerate(zip(x_pos, y_pos)):
             ax.text(x, y, str(ch_idx[i]), **text_args)
     
+    if (np.max(x_pos) - np.min(x_pos)) < 50:
+        ax.set_xlim(np.min(x_pos) - 125, np.max(x_pos) + 125)
+
+        
     ax.set_xlabel('X Position (um)')
     ax.set_ylabel('Y Position (um)')
 
