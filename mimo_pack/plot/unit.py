@@ -60,7 +60,7 @@ def probe_units(spks_nap, jitter=10, labels=True, cmap='viridis',
                cmap=cmap, label='SU units', **kwargs)
     
     if np.max(mu_meta['x'])- np.min(mu_meta['x']) < 250:
-        ax.set_xlim(np.min(mu_meta['x'])-125, np.max(mu_meta['x'])+125)
+        ax.set_xlim(np.min(mu_meta['x'])-250, np.max(mu_meta['x'])+250)
         
     ax.legend()
     cbar = plt.colorbar(ax.collections[1], ax=ax)

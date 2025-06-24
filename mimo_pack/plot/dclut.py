@@ -53,10 +53,10 @@ def probe_layout(probe_dcl, chan_names=True, ax=None, scat_args={}, text_args={}
         for i, (x, y) in enumerate(zip(x_pos, y_pos)):
             ax.text(x, y, str(ch_idx[i]), **text_args)
     
-    if (np.max(x_pos) - np.min(x_pos)) < 50:
-        ax.set_xlim(np.min(x_pos) - 125, np.max(x_pos) + 125)
+    if (np.max(x_pos) - np.min(x_pos)) < 250:
+        ax.set_xlim(np.min(x_pos) - 250, np.max(x_pos) + 250)
 
-        
+
     ax.set_xlabel('X Position (um)')
     ax.set_ylabel('Y Position (um)')
 
