@@ -64,7 +64,6 @@ def probe_units(spks_nap, jitter=10, labels=True, cmap='viridis',
         
     ax.legend()
     cbar = plt.colorbar(ax.collections[1], ax=ax)
-    ax.set_aspect('equal')
     
     if labels:
         cbar.set_label('log10(rate)')
