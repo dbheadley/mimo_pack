@@ -36,6 +36,7 @@ def probe_layout(probe_dcl, chan_names=True, ax=None, scat_args={}, text_args={}
     scat_args.setdefault('s', 10)
     scat_args.setdefault('c', 'k')
     scat_args.setdefault('alpha', 0.5)
+    scat_args.setdefault('marker', 's')
     text_args.setdefault('fontsize', 5)
     text_args.setdefault('ha', 'right')
     text_args.setdefault('va', 'top')
@@ -53,8 +54,8 @@ def probe_layout(probe_dcl, chan_names=True, ax=None, scat_args={}, text_args={}
         for i, (x, y) in enumerate(zip(x_pos, y_pos)):
             ax.text(x, y, str(ch_idx[i]), **text_args)
     
-    if (np.max(x_pos) - np.min(x_pos)) < 250:
-        ax.set_xlim(np.min(x_pos) - 250, np.max(x_pos) + 250)
+    if (np.nanmax(x_pos) - np.nanmin(x_pos)) < 250:
+        ax.set_xlim(np.nanmin(x_pos) - 250, np.nanmax(x_pos) + 250)
 
 
     ax.set_xlabel('X Position (um)')
