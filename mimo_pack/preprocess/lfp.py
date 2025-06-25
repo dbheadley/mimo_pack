@@ -123,7 +123,7 @@ def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=200, lfp_fs=1000, sync = 
     lfp_dcl_path = lfp_path.replace('.bin', '_dclut.json')
     lfp_times = np.concatenate(lfp_times).flatten()
     dcl_data.reset()
-    dcl_data.dcl['file']['name'] = lfp_path
+    dcl_data.dcl['file']['name'] = os.path.split(lfp_path)[1]
     dcl_data.dcl['file']['shape'][time_dim] = len(lfp_times)
     dcl_data.dcl['scales'][time_scale]['type'] = 'table'
     dcl_data.dcl['scales'][time_scale]['values'] = piecewise_table_monotonic(lfp_times)
