@@ -10,7 +10,7 @@ from tqdm import tqdm
 import sys
 import os
 
-def as_pynapple(phy_dir, dcl_file=None, suffix="", cluster_ids=None, qc=False,
+def as_pynapple(phy_dir, dcl_file=None, suffix="", cluster_ids=None,
                 verbose=True):
     """
     Loads spike times from Phy formatted files as a pynapple time series group
@@ -29,8 +29,6 @@ def as_pynapple(phy_dir, dcl_file=None, suffix="", cluster_ids=None, qc=False,
         Suffix to add to the end of file names when loading files.
     cluster_ids : list of int, optional
         List of cluster IDs to load. If None, all clusters will be loaded.
-    qc : bool, optional
-        Apply quality control to the loaded spikes. Default is False.
     verbose : bool, optional
         Whether to print progress messages. Default is True.
     
