@@ -370,67 +370,42 @@ def compute_spike_phamp_hist(spks, lfp, bins=(4, 9), freqs=[52]):
     return hist_full
 
 
-def calculate_ppc(phases):
+def ppc2(phases):
     """
-    Calculates the Pairwise Phase Consistency (PPC) for a set of phase values.
+    Alternative calculation of the Pairwise Phase Consistency (PPC2)
+    for a set of phase values.
 
-    The PPC is a bias-free measure of rhythmic neuronal synchronization, as
-    described in:
-    Vinck, M., van Wingerden, M., Womelsdorf, T., Fries, P., & Pennartz, C. M. A.
-    (2010). The pairwise phase consistency: a bias-free measure of rhythmic
-    neuronal synchronization. NeuroImage, 51(1), 112–122.
+    Created by Greg Glickert
 
-    Args:
-    phases: A 1D numpy array of phase values in radians. The shape should
+    Parameters
+    ----------
+    phases: A 1D numpy array 
+            Phase values in radians. The shape should
             be (n_observations,). For example, these could be the phases
             of spike times relative to an LFP oscillation.
 
-    Returns:
-    The PPC value, a float. According to the paper, this is an unbiased
-    estimator of the squared Phase-Locking Value (PLV^2). Returns numpy.nan
-    if there are fewer than two phase values.
-
-    Note: generated as a test by Gemini using Vinck et al. (2010) as a reference.
+    Returns
+    -------
+    ppc2: float
+        The PPC value, a float. This is an unbiased estimator of the squared
+        Phase-Locking Value (PLV^2) as described in Vinck et al. (2010).
+        Returns 0 if there are fewer than two phase values.
     """
-    n_observations = len(phases)
+    # Calculate PPC2 according to Vinck et al. (2010), Equation 6
+    n = len(phases)
 
-    # PPC is not defined for less than 2 observations, as it requires pairs.
-    if n_observations < 2:
+    if n <= 1:
         print("Warning: Cannot calculate PPC with less than 2 observations.")
         return np.nan
 
-    # The formula for the sample PPC is:
-    # PPC = (2 / (N * (N - 1))) * sum(cos(theta_j - theta_k)) for all unique pairs j < k
-    # This is equivalent to the average of the dot products of all unique pairs
-    # of phase vectors, where each phase is represented as a unit vector on a circle.
-    #
-    # Instead of using slow, explicit loops, we can compute this efficiently
-    # using numpy's broadcasting capabilities.
 
-    # 1. Create a matrix of all phase differences.
-    # The element at (j, k) will be phases[j] - phases[k].
-    phase_diffs = np.subtract.outer(phases, phases)
+    # Convert phases to unit vectors in the complex plane
+    unit_vectors = np.exp(1j * phases)
 
-    # 2. Compute the cosine of all phase differences. This is equivalent to
-    # computing the dot product for each pair of phase vectors.
-    # cos(a - b) = cos(a)cos(b) + sin(a)sin(b)
-    cos_phase_diffs = np.cos(phase_diffs)
+    # Calculate the resultant vector
+    resultant_vector = np.sum(unit_vectors)
 
-    # 3. The formula requires summing over unique pairs (j < k). This corresponds
-    # to the sum of the elements in the upper (or lower) triangle of the
-    # cos_phase_diffs matrix. We can get this by taking the total sum,
-    # subtracting the diagonal, and dividing by 2.
-    # The diagonal consists of cos(0)=1 for all elements.
-    sum_of_diagonal = n_observations # np.trace(cos_phase_diffs)
-    total_sum = np.sum(cos_phase_diffs)
+    # PPC2 = (|∑(e^(i*φ_j))|² - n) / (n * (n - 1))
+    ppc2 = (np.abs(resultant_vector) ** 2 - n) / (n * (n - 1))
 
-    # Sum of the cosine of differences for all unique pairs.
-    sum_of_pairs = (total_sum - sum_of_diagonal) / 2.0
-
-    # 4. The number of unique pairs is N * (N - 1) / 2.
-    n_pairs = (n_observations * (n_observations - 1)) / 2.0
-
-    # 5. The PPC is the average of the summed values.
-    ppc = sum_of_pairs / n_pairs
-
-    return ppc
+    return ppc2
