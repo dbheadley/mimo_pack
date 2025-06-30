@@ -103,7 +103,7 @@ def unit_lfp_mapping(spks, lfp, jitter=30, ax=None):
             '',
             xy=(lfp_x, lfp_y),
             xytext=(unit_pos[0], unit_pos[1]),
-            arrowprops=dict(arrowstyle="->", color='k', lw=1, alpha=0.2)
+            arrowprops=dict(arrowstyle="-|>", color='k', lw=1, alpha=0.2)
         )
         ax.plot(unit_pos[0], unit_pos[1], 'bo', markersize=5, alpha=0.5)
         ax.plot(lfp_x, lfp_y, 'r+', markersize=5, alpha=0.5)
