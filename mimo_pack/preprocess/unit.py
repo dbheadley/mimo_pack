@@ -520,7 +520,7 @@ def pynapple_spikes_qc(spks_pyn, dcl_file, wave_num=1000, ref_period=0.002, snr_
 
         # calculate amplitude cutoff
         # get scale factor required to fit normalized waveform to each sample waveform
-        wave_norm = (peak_wave / np.linalg.norm(peak_wave, axis=0)).flatten()
+        wave_norm = (peak_wave / (np.linalg.norm(peak_wave, axis=0)+1)).flatten() # +1 to avoid division by zero
         wave_2d = waves[:, near_inds, :].transpose((2,0,1))
         wave_amps = np.concatenate([np.linalg.lstsq(wave_norm.reshape(-1,1), 
                                                         wave.reshape(-1,1), rcond=-1)[0] 
