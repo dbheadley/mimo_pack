@@ -380,9 +380,9 @@ def ppc2(phases):
     Parameters
     ----------
     phases: A 1D numpy array 
-            Phase values in radians. The shape should
-            be (n_observations,). For example, these could be the phases
-            of spike times relative to an LFP oscillation.
+        Phase values in radians. The shape should
+        be (n_observations,). For example, these could be the phases
+        of spike times relative to an LFP oscillation.
 
     Returns
     -------
