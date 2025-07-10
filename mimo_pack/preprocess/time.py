@@ -173,7 +173,7 @@ def align_sequence(ser1, ser2, matchlen, verbose=False):
 
     stop1 = len(ser1) - matchlen
     stop2 = len(ser2) - matchlen
-    s2 = matchlen + 1
+    s2 = matchlen # removed + 1
     pairs = []
     if verbose:
         outer_iter = tqdm(range(matchlen+1, stop1))
@@ -181,7 +181,7 @@ def align_sequence(ser1, ser2, matchlen, verbose=False):
         outer_iter = range(matchlen+1, stop1)
 
     for s1 in outer_iter:
-        for s2off in range(0,stop2-s2):
+        for s2off in range(1,stop2-s2): # changed range start to 1 from 0
             serdiff = np.abs(ser1[(s1-matchlen):(s1+matchlen)]
                              -ser2[(s2+s2off-matchlen):(s2+s2off+matchlen)])
             serdiff = binary_opening(serdiff<1, np.ones(matchlen))

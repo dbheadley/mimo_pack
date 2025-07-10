@@ -43,20 +43,19 @@ def load_lfp_xr(lfp_path, notch_filter=False, remove_nan_time=True,
     ch_grid = nearest_grid(lfp_dcl, dx=dx, dy=dy)[0]
     lfp_dcl.reset()
     lfp_dcl.points(select={'channel': ch_grid})
-    lfp = lfp_dcl.read(format='xarray')[0]
-    lfp = lfp.sortby(['ch_x', 'ch_y'])
-    fs = 1/np.nanmedian(np.diff(lfp.time.to_numpy().flatten()))
-    lfp = lfp.assign_attrs(sample_rate = fs)
+    lfp_xr = lfp_dcl.read(format='xarray')[0]
+    lfp_xr = lfp_xr.sortby(['ch_x', 'ch_y'])
+    fs = 1/np.nanmedian(np.diff(lfp_xr.time.to_numpy().flatten()))
+    lfp_xr = lfp_xr.assign_attrs(sample_rate = fs)
 
     # Remove time steps with NaN if requested
     if remove_nan_time:
-        mask = ~np.isnan(lfp.time.values)
-        lfp = lfp.isel(time=mask)
+        mask = ~np.isnan(lfp_xr.time.values)
+        lfp_xr = lfp_xr.isel(time=mask)
 
     # Notch filter if requested
     if notch_filter:
-        fs = 1 / np.nanmedian(np.diff(lfp.time.values))
         b, a = ss.iirnotch(notch_freq, notch_width, fs=fs)
-        lfp.data = ss.filtfilt(b, a, lfp.values, axis=0)
+        lfp_xr.data = ss.filtfilt(b, a, lfp_xr.values, axis=0)
 
-    return lfp
+    return lfp_xr
