@@ -1,6 +1,7 @@
 """Load image files
 Author: Drew B. Headley
 """
+
 import os
 import glob
 from PIL import Image
@@ -8,7 +9,8 @@ import numpy as np
 import xarray as xr
 from typing import List
 
-def image_dir_to_xarray(directory_path: str, image_extensions: List[str] = None) -> xr.DataArray:
+def load_images_xr(directory_path: str, image_extensions: List[str] = None, 
+                   insert_blank: bool = False) -> xr.DataArray:
     """Read all images from a directory into an xarray.DataArray.
 
     This function scans a specified directory for image files, reads them
@@ -27,10 +29,12 @@ def image_dir_to_xarray(directory_path: str, image_extensions: List[str] = None)
     image_extensions : list of str, optional
         A list of image file extensions to look for (e.g., ['.png', '.jpg']).
         If None, defaults to common image formats.
+    insert_blank : bool, optional
+        If True, insert a blank image at the beginning with image name 'blank'.
 
     Returns
     -------
-    xr.DataArray
+    imgs_xr: xr.DataArray
         An xarray.DataArray containing the image data. The dimensions will
         be ('image', 'y', 'x') for grayscale or 
         ('image', 'y', 'x', 'channel') for color images.
@@ -57,19 +61,25 @@ def image_dir_to_xarray(directory_path: str, image_extensions: List[str] = None)
 
     # Read all images into a list of numpy arrays using PIL
     images_list = [np.array(Image.open(f)) for f in image_files]
-    
-    # Get the filenames to use as a coordinate
     image_names = [os.path.basename(f) for f in image_files]
 
+    # Insert blank image if requested
+    if insert_blank:
+        # Use the shape and dtype of the first image
+        blank_shape = images_list[0].shape
+        blank_dtype = images_list[0].dtype
+        blank_image = np.zeros(blank_shape, dtype=blank_dtype)
+        images_list.insert(0, blank_image)
+        image_names.insert(0, 'blank')
+
     # Stack the images into a single numpy array
-    # This will create a 3D array for grayscale or 4D for color images
     all_images_data = np.stack(images_list, axis=0)
     
     # Define dimensions based on the shape of the stacked numpy array
     if all_images_data.ndim == 3: # Grayscale images
         dims = ("image", "y", "x")
         coords = {
-            "image": np.arange(len(image_files)),
+            "image": np.arange(len(image_names)),
             "y": np.arange(all_images_data.shape[1]),
             "x": np.arange(all_images_data.shape[2]),
             "image_name": ("image", image_names),
@@ -77,7 +87,7 @@ def image_dir_to_xarray(directory_path: str, image_extensions: List[str] = None)
     elif all_images_data.ndim == 4: # Color images
         dims = ("image", "y", "x", "channel")
         coords = {
-            "image": np.arange(len(image_files)),
+            "image": np.arange(len(image_names)),
             "y": np.arange(all_images_data.shape[1]),
             "x": np.arange(all_images_data.shape[2]),
             "channel": np.arange(all_images_data.shape[3]),
@@ -86,65 +96,37 @@ def image_dir_to_xarray(directory_path: str, image_extensions: List[str] = None)
     else:
         raise ValueError(f"Unexpected number of dimensions in image data: {all_images_data.ndim}")
 
-
     # Create the xarray DataArray
-    xarray_images = xr.DataArray(
+    imgs_xr = xr.DataArray(
         all_images_data,
         dims=dims,
         coords=coords,
     )
     
     # Add attributes for metadata
-    xarray_images.attrs['directory_path'] = directory_path
+    imgs_xr.attrs['directory_path'] = directory_path
     
-    return xarray_images
+    return imgs_xr
 
 if __name__ == '__main__':
-    # This is an example of how to use the function.
-    # You will need to create a directory with some images to test this.
-    
+    import matplotlib.pyplot as plt
+
     try:
         # Create a dummy directory and some dummy images for demonstration
-        temp_dir = 'temp_image_dir'
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-        
-        # Create two dummy grayscale images
-        img1_data = np.random.randint(0, 256, size=(100, 80), dtype=np.uint8)
-        img2_data = np.random.randint(0, 256, size=(100, 80), dtype=np.uint8)
-        
-        # Save the dummy images using PIL
-        Image.fromarray(img1_data).save(os.path.join(temp_dir, 'test_image_1.png'))
-        Image.fromarray(img2_data).save(os.path.join(temp_dir, 'test_image_2.png'))
-
-        # Specify the path to the directory
-        image_directory = temp_dir
+        img_path = os.path.join('..', '..', 'test_data', 'invitro', 'single_squares')
         
         # Convert the images in the directory to an xarray DataArray
-        xarray_of_images = image_dir_to_xarray(image_directory)
+        imgs_xr = load_images_xr(img_path)
 
         # Print the resulting xarray DataArray to see its structure
         print("Successfully converted image directory to xarray.DataArray:")
-        print(xarray_of_images)
-
-        # You can now easily perform operations on the data, for example:
-        # Select an image by its name
-        first_image = xarray_of_images.sel(image_name='test_image_1.png')
-        
-        print("\nData for 'test_image_1.png':")
-        print(first_image)
+        print(imgs_xr)
 
         # Plot the selected image
-        import matplotlib.pyplot as plt
-        first_image.plot(cmap='gray')
-        plt.title("First Image from Xarray")
+        imgs_xr.mean(dim='image').plot(cmap='gray')
+        plt.title("Average image")
         plt.show()
 
     except Exception as e:
         print(f"An error occurred. Please ensure you have a directory with images.")
         print(f"Error details: {e}")
-    finally:
-        # Clean up the dummy files and directory
-        import shutil
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)

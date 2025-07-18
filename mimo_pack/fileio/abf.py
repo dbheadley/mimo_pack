@@ -87,7 +87,6 @@ if __name__ == '__main__':
     import os
 
     try:
-        # This is a placeholder for the user's file path
         abf_file_path = os.path.join('..','..','test_data','invitro','21520000.abf')
         
         # Convert the ABF file to an xarray DataArray
