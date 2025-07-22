@@ -62,20 +62,20 @@ def stacked_lines(data_vals, x_vals=None, disp_color='black',
     if abs_sep is not None:
         line_sep = abs_sep
     else:
-        max_diff = np.max(np.abs(np.max(data_vals, axis=0) - np.min(data_vals, axis=0)))
+        max_diff = np.nanmax(np.abs(np.nanmax(data_vals, axis=0) - np.nanmin(data_vals, axis=0)))
         line_sep = max_diff * sep_ratio
 
     # Plot lines
     line_handles = []
     for i, row in enumerate(data_vals.T):
         offset = i * line_sep
-        line, = plt.plot(x_vals, row + offset, color=disp_color[i], **kwargs)
+        line, = ax.plot(x_vals, row + offset, color=disp_color[i], **kwargs)
         line_handles.append(line)
-        plt.axhline(y=offset, color='gray', linestyle=':', linewidth=0.5)
-        if labels:
-            plt.text(x_vals[0], offset, labels[i], color=disp_color[i], verticalalignment='center')
-        if labels_right:
-            plt.text(x_vals[-1], offset, labels_right[i], color=disp_color[i], verticalalignment='center')
+        ax.axhline(y=offset, color='gray', linestyle=':', linewidth=0.5)
+        if labels is not None:
+            ax.text(x_vals[0], offset, labels[i], color=disp_color[i], verticalalignment='center')
+        if labels_right is not None:
+            ax.text(x_vals[-1], offset, labels_right[i], color=disp_color[i], verticalalignment='center')
 
     return ax
 
