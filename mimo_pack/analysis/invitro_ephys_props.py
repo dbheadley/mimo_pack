@@ -263,12 +263,12 @@ def _rate_properties(ap_peak_times):
         ap_rates.append(np.mean(ap_inst_rate))
 
     # Calculate adaptation ratio
-    adapt_trial = [i for i, r in enumerate(ap_peak_times) if len(r) >= 4][0]
-    if adapt_trial is None:
-        adaptation_ratio = np.nan
-    else:
+    try:
+        adapt_trial = [i for i, r in enumerate(ap_peak_times) if len(r) >= 4][0]
         ap_inst_rate = 1/np.diff(ap_peak_times[adapt_trial])
         adaptation_ratio = ap_inst_rate[0] / ap_inst_rate[-1]
+    except IndexError:
+        adaptation_ratio = np.nan
     
     return ap_rates, adaptation_ratio
 

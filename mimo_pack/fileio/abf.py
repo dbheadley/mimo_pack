@@ -7,6 +7,35 @@ import pyabf
 import numpy as np
 import xarray as xr
 
+
+def load_abf_settings(abf_file_path: str) -> dict:
+    """
+    Reads the settings from an Axon Binary File (ABF) and returns them as a dictionary.
+
+    Parameters
+    ----------
+    abf_file_path: string
+        The full path to the .abf file.
+
+    Returns
+    -------
+    settings: dict
+        A dictionary containing the ABF settings, including protocol, number of sweeps,
+        channel names, and units.
+    """
+    abf = pyabf.ABF(abf_file_path)
+    
+    settings = {
+        'protocol': abf.protocol,
+        'n_sweeps': abf.sweepCount,
+        'channel_names': abf.adcNames,
+        'channel_units': abf.adcUnits,
+        'sample_rate': abf.sampleRate,
+        'created': abf.abfDateTime
+    }
+    
+    return settings
+
 def load_abf_xr(abf_file_path: str) -> xr.DataArray:
     """
     Reads an Axon Binary File (ABF) and converts it into an xarray.DataArray.
