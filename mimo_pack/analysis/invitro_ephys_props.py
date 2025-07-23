@@ -199,8 +199,8 @@ def _detect_aps(v_traces, dt):
             inds = ap_window + ind + ap_win_start
             wf.append(curr_v[inds])
         ap_waveforms.append(np.array(wf).T)
-    
-    return ap_peak_times, ap_peak_amps, ap_counts, ap_waveforms
+
+    return ap_peak_times, ap_peak_amps, np.array(ap_counts), ap_waveforms
 
 
 def _first_spike_properties(ap_waveforms, pulse_vals):
