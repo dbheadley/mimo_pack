@@ -107,6 +107,7 @@ def load_abf_xr(abf_file_path: str) -> xr.DataArray:
     data_xr.attrs['abf_version'] = abf.abfVersionString
     data_xr.attrs['protocol'] = abf.protocol
     data_xr.attrs['sample_rate'] = abf.sampleRate
+    data_xr.attrs['created'] = abf.abfDateTime
     data_xr.time.attrs['units'] = 's'
 
     return data_xr
