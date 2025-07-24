@@ -23,7 +23,7 @@ def _center_of_mass(image: np.ndarray) -> np.ndarray:
 
     return np.array([y_center, x_center])
 
-def ivic(rec: xr.DataArray) -> xr.DataArray:
+def format_ivic(rec: xr.DataArray) -> xr.DataArray:
     """Adds current injection information to the corresponding
     trials in the recording data.
     
@@ -68,7 +68,7 @@ def ivic(rec: xr.DataArray) -> xr.DataArray:
 
     return rec
 
-def focal_stimulation(rec: xr.DataArray, imgs: xr.DataArray) -> xr.DataArray:
+def format_focal_stimulation(rec: xr.DataArray, imgs: xr.DataArray) -> xr.DataArray:
     """Assigns the x,y coordinates of the center of mass of each image 
     in imgs to the corresponding trial in rec.
     
