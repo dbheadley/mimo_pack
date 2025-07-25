@@ -264,7 +264,11 @@ def fit_spectrum_aperiodic_xr(spec, f_range=None, **kwargs):
 
     # Define a function to apply along the 'frequency' dimension
     def _fit_func(x):
-        fit, _ = fit_spectrum_aperiodic(freqs, x, f_range=f_range, **kwargs)
+        try:
+            fit, _ = fit_spectrum_aperiodic(freqs, x, f_range=f_range, **kwargs)
+        except Exception as e:
+            print(f"Error fitting spectrum: {e}")
+            fit = np.nan * np.ones_like(x)
         return fit
 
     # Apply along 'frequency', broadcasting over other dimensions
