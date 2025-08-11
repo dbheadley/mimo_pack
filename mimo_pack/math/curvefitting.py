@@ -5,6 +5,42 @@
 from scipy.optimize import curve_fit
 import numpy as np
 
+def fit_sine_freq(x, xp, yp, freq):
+    """
+    Fit a sine wave of specified frequency to data using the Fourier equation approach.
+
+    Parameters
+    ----------
+    x : array-like
+        The x values to evaluate the curve at.
+    xp : array-like
+        The x values of the data to fit.
+    yp : array-like
+        The y values of the data to fit.
+    freq : float
+        The frequency of the sine wave (Hz).
+
+    Returns
+    -------
+    fit : array-like
+        The fitted sine wave values at x.
+    params : dict
+        Dictionary with amplitude, phase, and offset.
+    """
+    xp = np.asarray(xp)
+    yp = np.asarray(yp)
+    omega = 2 * np.pi * freq
+    sin_basis = np.sin(omega * xp)
+    cos_basis = np.cos(omega * xp)
+    X = np.column_stack([sin_basis, cos_basis, np.ones_like(xp)])
+    beta, _, _, _ = np.linalg.lstsq(X, yp, rcond=None)
+    amp = np.hypot(beta[0], beta[1])
+    phase = np.arctan2(beta[1], beta[0])
+    offset = beta[2]
+    fit = amp * np.sin(omega * x + phase) + offset
+    params = {'frequency': freq, 'amplitude': amp, 'phase': phase, 'offset': offset}
+    return fit, params
+    
 # half-gaussian fit
 def half_gauss(x, amp, sd, offset):
     """
