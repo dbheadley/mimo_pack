@@ -64,7 +64,10 @@ def cc_correct_poly(cc, exclude_lag=0.005, order=12):
     lags = cc.index.values
     w = (np.abs(lags) > exclude_lag).astype(float)
     cent_lags = np.abs(lags) <= 0.0006
-    w[cent_lags] = (w.size-np.sum(w))/(np.sum(cent_lags))
+
+    # Overweight weights for central near 0 ms lags, accounting for the 
+    # excluded lags in the monosynaptic window
+    w[cent_lags] = (w.size-np.sum(w))/(4*np.sum(cent_lags))
 
     cc_corr = cc.copy()
     cc_baseline = cc_corr.copy()
