@@ -20,7 +20,7 @@ def as_pynapple(phy_dir, dcl_file=None, suffix="", cluster_ids=None,
     phy_dir : string
         Path to the directory holding the Phy files
     dcl_file : string
-        Full file path to a dclut json file with a 'time', 'ch_x', and 'ch_y' scale. 
+        Full file path to a dclut json file with a 'time', 'ch_x', 'ch_y' and 'ch_shank' scales. 
         Used when just dividing time index by sample rate will not suffice and 
         explicit time points are required because multiple files had to be 
         synchronized with each other. The dclut file will also be used to determine
@@ -156,6 +156,7 @@ def as_pynapple(phy_dir, dcl_file=None, suffix="", cluster_ids=None,
         wave_win = np.array([[-30], [60]])
         x_pos = spks_dcl.scale_values(scale='ch_x')
         y_pos = spks_dcl.scale_values(scale='ch_y')
+        shank = spks_dcl.scale_values(scale='ch_shank')
         for id in clu_iter:
             spks_dcl.reset()
 
@@ -189,11 +190,13 @@ def as_pynapple(phy_dir, dcl_file=None, suffix="", cluster_ids=None,
          
             x_near = x_pos[near_inds]
             y_near = y_pos[near_inds]
+            shank_near = shank[near_inds]
             
             wave_list.append({'waveform': waveform, 'inds': near_inds, 
-                              'x': x_near, 'y': y_near})
+                              'x': x_near, 'y': y_near, 'shank':shank_near})
         spks.set_info(x=[w['x'][-1] for w in wave_list])
         spks.set_info(y=[w['y'][-1] for w in wave_list])
+        spks.set_info(shank=[w['shank'][-1] for w in wave_list])
         spks.set_info(waveform=wave_list)
 
     return spks
