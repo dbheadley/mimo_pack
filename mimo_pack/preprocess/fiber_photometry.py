@@ -9,7 +9,7 @@ from mimo_pack.analysis.filter import lp_filter_xr
 def correct_fp_signal(raw: xr.DataArray, 
                       ch_groups: dict = {'ch1': ('LockInAOUT02/AIN01', 'LockInAOUT01/AIN01'),
                                          'ch2': ('LockInAOUT04/AIN02', 'LockInAOUT03/AIN02')},
-                      z_window: int = 100, cutoff_freq: float = 5) -> xr.DataArray:
+                      z_window: int = None, cutoff_freq: float = 5) -> xr.DataArray:
     """
     Corrects the fluorescence photometry signal by regressing out movement from
     the isosbestic channel. 
@@ -29,7 +29,7 @@ def correct_fp_signal(raw: xr.DataArray,
                     'ch2': ('LockInAOUT03/AIN02', 'LockInAOUT04/AIN02')}.
     z_window : numeric, optional
         The size of the moving window in seconds for z-score normalization.
-        Default is 100 seconds.
+        Default is no rolling window, z-score normalization is applied to the entire signal.
     cutoff_freq : float, optional
         The cutoff frequency for the low-pass filter in Hz.
         Default is 5 Hz.
@@ -41,7 +41,6 @@ def correct_fp_signal(raw: xr.DataArray,
     """
 
     s_rate = raw.attrs.get('sample_rate', 1.0)
-    z_window = int(z_window * s_rate)
 
     # low-pass filter the signals
     raw_lp = lp_filter_xr(raw, cutoff_freq=cutoff_freq)
@@ -84,7 +83,11 @@ def correct_fp_signal(raw: xr.DataArray,
     )
 
     # Normalize the corrected signal using z-score normalization
-    pro_mean = pro.rolling(time=z_window, center=True).mean()
-    pro = (pro - pro_mean) / pro.rolling(time=z_window, center=True).std()
+    if z_window is not None:
+        z_window = int(z_window * s_rate)
+        pro_mean = pro.rolling(time=z_window, center=True).mean()
+        pro = (pro - pro_mean) / pro.rolling(time=z_window, center=True).std()
+    else:
+        pro = (pro - pro.mean(dim='time')) / pro.std(dim='time')
 
     return pro
