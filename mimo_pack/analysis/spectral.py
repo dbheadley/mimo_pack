@@ -10,7 +10,7 @@ import pandas as pd
 import scipy.signal as ss
 from mimo_pack.math.curvefitting import fit_exp_knee, exp_knee
 
-def stft_xr(signal, window=1, **kwargs):
+def stft_xr(signal, window=1.0, **kwargs):
     """
     Apply Short-Time Fourier Transform (STFT) to an xarray signal 
     and return an xarray with a frequency dimension.
