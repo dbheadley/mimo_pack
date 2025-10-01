@@ -5,13 +5,10 @@
 import cv2
 import os
 import glob
-import argparse
 import re
-import json
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-import pdb
 
 def tif_to_video(folder_path, output_base=None, fps=30):
     """ Convert TIF images to a video. 
@@ -28,6 +25,13 @@ def tif_to_video(folder_path, output_base=None, fps=30):
         Base name of the output files.
     fps : int, optional
         Frames per second for the output video. Default is 30.
+
+    Returns
+    -------
+    vid_path : str
+        Path to the output video file.
+    tbl_path : str
+        Path to the output table file.
     """
 
     # Get a list of all TIF files in the folder
@@ -74,6 +78,8 @@ def tif_to_video(folder_path, output_base=None, fps=30):
     # write frame data to csv file
     files_df = files_df.drop(columns=['tif_path'])
     files_df.to_csv(tbl_path)
+
+    return vid_path, tbl_path
 
 
 def create_video_rois(video_path, frame_time=0):
@@ -269,15 +275,116 @@ def rois_to_barcodes(table_path, roi_cols, roi_thresh=200, barcode_name='barcode
     barcode_df = tbl_df[[barcode_name]].copy()
     return barcode_df
 
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser(description='Convert TIF images to a video.')
-#     parser.add_argument('folder_path', type=str, help='Path to the folder containing TIF images.')
-#     parser.add_argument('output_base', type=str, help='Base name of the output files.')
-#     parser.add_argument('--fps', type=int, default=30, help='Frames per second for the output video.')
+def extract_rois_to_videos(video_path, display_frame=0, output_dir=None):
+    """
+    Allows user to select multiple ROIs on a given frame, then saves a new video for each ROI.
+    User can adjust brightness and contrast before ROI selection. Videos are saved with the adjusted settings.
+    
+    Parameters
+    ----------
+    video_path : str
+        Path to the video file.
+    display_frame : int, optional
+        Frame index to display for ROI selection (default: 0).
+    output_dir : str, optional
+        Directory to save ROI videos. If None, saves in the same directory as video_path.
 
-#     args = parser.parse_args()
-#     print('Converting TIF images to video...')
-#     print('Folder path:', args.folder_path)
-#     print('Output base:', args.output_base)
-#     print('FPS:', args.fps)
-#     tif_to_video(args.folder_path, args.output_base, args.fps)
+    Returns
+    -------
+    roi_videos : list of str
+        List of output video file paths, one per ROI.
+    """
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise IOError(f"Error opening video file: {video_path}")
+
+    # Go to the display frame
+    cap.set(cv2.CAP_PROP_POS_FRAMES, display_frame)
+    ret, frame = cap.read()
+    if not ret:
+        raise IOError(f"Error reading frame {display_frame} from video file: {video_path}")
+
+    # Default values for contrast and brightness
+    contrast = 100  # 100 means 1.0
+    brightness = 100  # 100 means 0
+
+    # Window for ROI selection
+    window_name = 'Select ROIs'
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+    # Trackbar callback
+    def update_display(_=None):
+        alpha = cv2.getTrackbarPos('Contrast', window_name) / 100.0  # 0.0 - 3.0
+        beta = cv2.getTrackbarPos('Brightness', window_name) - 100   # -100 to 100
+        adjusted = cv2.convertScaleAbs(frame, alpha=alpha, beta=beta)
+        cv2.imshow(window_name, adjusted)
+
+    # Create trackbars
+    cv2.createTrackbar('Contrast', window_name, contrast, 300, update_display)
+    cv2.createTrackbar('Brightness', window_name, brightness, 200, update_display)
+    update_display()
+
+    # Wait for user to press any key to continue
+    cv2.waitKey(0)
+    # Get final contrast/brightness values
+    final_contrast = cv2.getTrackbarPos('Contrast', window_name) / 100.0
+    final_brightness = cv2.getTrackbarPos('Brightness', window_name) - 100
+
+    # Show adjusted frame for ROI selection
+    adjusted_frame = cv2.convertScaleAbs(frame, alpha=final_contrast, beta=final_brightness)
+    cv2.imshow(window_name, adjusted_frame)
+    rois = cv2.selectROIs(window_name, adjusted_frame, fromCenter=False)
+    cv2.destroyWindow(window_name)
+
+    if len(rois) == 0:
+        print("No ROIs selected.")
+        return []
+
+    # Prepare output directory
+    if output_dir is None:
+        output_dir = os.path.dirname(video_path)
+    os.makedirs(output_dir, exist_ok=True)
+    file_root = os.path.splitext(os.path.basename(video_path))[0]
+
+    # Get video properties
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Prepare video writers for each ROI
+    writers = []
+    out_paths = []
+    for idx, (x, y, w, h) in enumerate(rois):
+        out_path = os.path.join(output_dir, f'{file_root}_roi_{idx+1}.mp4')
+        writer = cv2.VideoWriter(
+            out_path,
+            cv2.VideoWriter_fourcc(*'mp4v'),
+            fps,
+            (w, h),
+            isColor=True
+        )
+        writers.append(writer)
+        out_paths.append(out_path)
+
+    # Reset to first frame
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    for _ in range(total_frames):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # Apply contrast and brightness to each frame
+        adj_frame = cv2.convertScaleAbs(frame, alpha=final_contrast, beta=final_brightness)
+        for idx, (x, y, w, h) in enumerate(rois):
+            roi_frame = adj_frame[y:y+h, x:x+w]
+            writers[idx].write(roi_frame)
+
+    # Release everything
+    cap.release()
+    for writer in writers:
+        writer.release()
+
+    print(f"Saved {len(out_paths)} ROI video(s):")
+    for path in out_paths:
+        print(path)
+
+    return out_paths
