@@ -327,6 +327,7 @@ def extract_rois_to_videos(video_path, display_frame=0, output_dir=None):
 
     # Wait for user to press any key to continue
     cv2.waitKey(0)
+    
     # Get final contrast/brightness values
     final_contrast = cv2.getTrackbarPos('Contrast', window_name) / 100.0
     final_brightness = cv2.getTrackbarPos('Brightness', window_name) - 100

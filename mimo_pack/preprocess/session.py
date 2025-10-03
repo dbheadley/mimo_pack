@@ -41,6 +41,7 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
     """
     
     # identify all ap and nidq files in the session directory
+    print("Identifying files in session directory: {}".format(sess_dir))
     if use_catgt_version:
         ap_files = find_all_matching_files(sess_dir, r'tcat\.imec([0-9]+)\.ap\.bin')
     else:
@@ -61,6 +62,7 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
     # align the times across all the dclut files to the first ap file
     ap_r = ap_dclut_files[0] 
     sync_scale_name = 'time'
+    print("Aligning all files to {}".format(os.path.basename(ap_r)))
     for ap_t in range(1, len(ap_dclut_files)):
         file_t = ap_dclut_files[ap_t]
         print('Aligning {} to {}'.format(os.path.basename(file_t), os.path.basename(ap_r)))
@@ -74,6 +76,7 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
     lfp_files = []
     lfp_dclut_files = []
     # make a LFP file from the imec files 
+    print("Making LFP files from AP files:")
     for file in ap_dclut_files:
         print('Processing {}'.format(os.path.basename(file)))
         lfp_files.append(file.replace('ap_dclut.json','lfp.bin'))
@@ -82,6 +85,7 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
     # create a dataframe with the file names, first column is the session dir, second is the probe directory, 
     # third is the file, fourth is its dclut json file, and last is the type of file
     files = []
+    print("Creating dataframe with file names, dclut files, and types")
     for f in range(len(ap_files)):
         files.append([sess_dir, ap_files[f], ap_dclut_files[f], 'ap'])
     for f in range(len(lfp_files)):
