@@ -22,10 +22,10 @@ def window_xr(data: xr.DataArray, dim: str, centers: np.ndarray,
         The dimension along which to window (e.g., 'time').
     centers : np.ndarray
         An array of center points for the windows.
-    pre : int or float
-        An integer or float specifying the length before each center.
-    post : int or float
-        An integer or float specifying the length after each center.
+    pre : float
+        A float specifying the length before each center.
+    post : float
+        A float specifying the length after each center.
     indices : bool, optional
         If True, the centers, pre, and post are treated as indices rather 
         than coordinate values. If false, indices are calculated. Default is False.
@@ -45,7 +45,7 @@ def window_xr(data: xr.DataArray, dim: str, centers: np.ndarray,
     
     # If indices is False, convert window centers and edges to indices
     if not indices:
-        centers = np.array([dim_values[np.abs(dim_values - c).argmin()] for c in centers])
+        centers = np.array([np.abs(dim_values - c).argmin() for c in centers])
         pre = np.round(pre / dim_step)
         post = np.round(post / dim_step)
 
@@ -56,7 +56,7 @@ def window_xr(data: xr.DataArray, dim: str, centers: np.ndarray,
         start = int(center - pre)
         end = int(center + post)
 
-        if start < dim_values[0] or end > dim_values[-1]:
+        if start < 0 or end > dim_values.size:
             raise ValueError(f"Window {i} is out of bounds.")
         
         window_slice = data.isel({dim: slice(start, end)})
