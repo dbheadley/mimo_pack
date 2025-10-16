@@ -5,7 +5,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 def stacked_lines(data_vals, x_vals=None, disp_color='black', 
-                       sep_ratio=1, labels=None, labels_right=None, 
+                       sep_ratio=1, labels=None, 
                        abs_sep=None, ax=None, **kwargs):
     """
     Plots a series of line plots stacked along the y-axis.
@@ -23,9 +23,7 @@ def stacked_lines(data_vals, x_vals=None, disp_color='black',
     sep_ratio : float, optional
         The separation ratio between lines based on their maximum value. Default is 1.
     labels : list of str, optional
-        Labels for each line, displayed on the left side.
-    labels_right : list of str, optional
-        Labels for each line, displayed on the right side.
+        Labels for each line, displayed only on the right side as ticks.
     abs_sep : float, optional
         Absolute separation between lines. Overrides `sep_ratio` if provided.
     **kwargs : dict
@@ -49,7 +47,6 @@ def stacked_lines(data_vals, x_vals=None, disp_color='black',
         disp_color = [plt.colors.to_rgb(c) if isinstance(c, str) else c for c in disp_color]
     disp_color = np.array(disp_color)
 
-
     if disp_color.shape[0] == 1:
         disp_color = np.tile(disp_color, (data_vals.shape[1], 1))
     elif disp_color.shape[0] != data_vals.shape[1]:
@@ -57,6 +54,9 @@ def stacked_lines(data_vals, x_vals=None, disp_color='black',
 
     if ax is None:
         fig, ax = plt.subplots()
+
+    # Create a second axis for right-side labels
+    ax_right = ax.twinx()
 
     # Handle separation
     if abs_sep is not None:
@@ -67,15 +67,26 @@ def stacked_lines(data_vals, x_vals=None, disp_color='black',
 
     # Plot lines
     line_handles = []
+    offsets = []
     for i, row in enumerate(data_vals.T):
         offset = i * line_sep
+        offsets.append(offset)
         line, = ax.plot(x_vals, row + offset, color=disp_color[i], **kwargs)
         line_handles.append(line)
         ax.axhline(y=offset, color='gray', linestyle=':', linewidth=0.5)
-        if labels is not None:
-            ax.text(x_vals[0], offset, labels[i], color=disp_color[i], verticalalignment='center')
-        if labels_right is not None:
-            ax.text(x_vals[-1], offset, labels_right[i], color=disp_color[i], verticalalignment='center')
+
+    # Set right axis ticks and labels
+    ax_right.set_ylim(ax.get_ylim())
+    ax_right.set_yticks(offsets)
+    if labels is not None:
+        ax_right.set_yticklabels(labels)
+    else:
+        ax_right.set_yticklabels([''] * len(offsets))
+
+    # Hide right axis spines except right
+    ax_right.spines['top'].set_visible(False)
+    ax_right.spines['left'].set_visible(False)
+    ax_right.spines['bottom'].set_visible(False)
 
     return ax
 
