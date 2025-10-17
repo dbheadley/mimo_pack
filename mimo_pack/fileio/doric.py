@@ -151,3 +151,70 @@ def load_doric_xr(doric_file_path: str) -> xr.DataArray:
     dio_xr.time.attrs['units'] = 's'
 
     return fp_xr, power_xr, dio_xr
+
+
+def doric_to_binary_dclut(doric_file_path: str, out_dir: str = None, dtype: str = 'float32') -> str:
+    """
+    Convert a Doric file to a binary file containing all traces and a dclut JSON metadata file.
+
+    Parameters
+    ----------
+    doric_file_path : str
+        Path to the Doric file (.h5).
+    out_dir : str, optional
+        Output directory for binary and dclut files. If None, uses Doric file directory.
+    dtype : str, optional
+        Data type for binary file. Default is 'float32'.
+
+    Returns
+    -------
+    bin_path : str
+        Path to the binary file.
+    dclut_path : str
+        Path to the dclut JSON metadata file.
+    """
+    # Load Doric data
+    fp_xr, power_xr, dio_xr = load_doric_xr(doric_file_path)
+
+    # Stack all traces along channel axis
+    # Align time axes by interpolating to the fp_xr time points
+    time = fp_xr.time.values
+    traces = [fp_xr.values]
+    ch_names = list(fp_xr.channel.values)
+
+    # Interpolate power_xr and dio_xr to fp_xr time axis if needed
+    for xr_data in [power_xr, dio_xr]:
+        # Interpolate if time axes differ
+        if not np.array_equal(xr_data.time.values, time):
+            interp = np.empty((len(time), xr_data.shape[1]), dtype=xr_data.dtype)
+            for i in range(xr_data.shape[1]):
+                interp[:, i] = np.interp(time, xr_data.time.values, xr_data[:, i])
+            traces.append(interp)
+        else:
+            traces.append(xr_data.values)
+        ch_names.extend(list(xr_data.channel.values))
+
+    # Concatenate all traces (time x channel)
+    all_traces = np.concatenate(traces, axis=1)
+    all_traces = all_traces.astype(dtype)
+
+    # Output paths
+    if out_dir is None:
+        out_dir = os.path.dirname(doric_file_path)
+    base_name = os.path.splitext(os.path.basename(doric_file_path))[0]
+    bin_path = os.path.join(out_dir, base_name + '_alltraces.bin')
+    dclut_path = os.path.join(out_dir, base_name + '_alltraces_dclut.json')
+
+    # Write binary file
+    all_traces.tofile(bin_path)
+
+    # Create dclut metadata
+    shape = (all_traces.shape[0], all_traces.shape[1])  # (time, channel)
+    scales = [
+        {'name': 'time', 'dim': 0, 'unit': 's', 'type': 'list', 'val': time},
+        {'name': 'channel', 'dim': 1, 'unit': 'au', 'type': 'list', 'val': ch_names}
+    ]
+    create_dclut(bin_path, shape, dcl_path=dclut_path, dtype=dtype, 
+                 data_name='doric_traces', data_unit='au', scales=scales)
+
+    return bin_path, dclut_path

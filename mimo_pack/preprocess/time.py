@@ -184,7 +184,7 @@ def align_sequence(ser1, ser2, matchlen, verbose=False):
         for s2off in range(1,stop2-s2): # changed range start to 1 from 0
             serdiff = np.abs(ser1[(s1-matchlen):(s1+matchlen)]
                              -ser2[(s2+s2off-matchlen):(s2+s2off+matchlen)])
-            serdiff = binary_opening(serdiff<1, np.ones(matchlen))
+            serdiff = binary_opening(serdiff<1, np.ones(2*matchlen))
             if serdiff[matchlen]:
                 s2 += s2off
                 pairs.append([s1, s2])
