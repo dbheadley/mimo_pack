@@ -23,7 +23,13 @@ def lp_filter_xr(signal_xr, cutoff_freq=10, order=4):
     xr.DataArray
         The filtered signal.
     """
-    s_rate = signal_xr.attrs.get('sample_rate', 1.0)
+
+    # if signal_xr doesn't have sample_rate attribute, calculate from time dimension
+    if 'sample_rate' not in signal_xr.attrs:
+        s_rate = 1/signal_xr.time.diff('time').mean().item()
+    else:
+        s_rate = signal_xr.attrs.get('sample_rate')
+        
     nyquist = 0.5 * s_rate
     normal_cutoff = cutoff_freq / nyquist
     b, a = butter(order, normal_cutoff, btype='low', analog=False)
