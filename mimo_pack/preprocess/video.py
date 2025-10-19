@@ -363,7 +363,6 @@ def track_video_diff(video_path, table_path=None, rois=None,
     return roi_df
 
 
-
 def rois_to_barcodes(table_path, roi_cols, roi_thresh=200, barcode_name='barcode'):
     """ Convert the values of the ROIs on each frame to a barcode.
     Update the table file with the barcode values. Each barcode is
