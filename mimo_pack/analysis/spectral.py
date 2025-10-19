@@ -10,7 +10,7 @@ import pandas as pd
 import scipy.signal as ss
 from mimo_pack.math.curvefitting import fit_exp_knee, exp_knee
 
-def stft_xr(signal, window=1.0, **kwargs):
+def stft_xr(signal, window=1, **kwargs):
     """
     Apply Short-Time Fourier Transform (STFT) to an xarray signal 
     and return an xarray with a frequency dimension.
@@ -268,9 +268,9 @@ def fit_spectrum_aperiodic_xr(spec, f_range=None, **kwargs):
             fit, _ = fit_spectrum_aperiodic(freqs, x, f_range=f_range, **kwargs)
         except Exception as e:
             print(f"Error fitting spectrum: {e}")
-            fit = np.nan * np.ones_like(x)
+            fit = np.full_like(x, np.nan)
         return fit
-
+    
     # Apply along 'frequency', broadcasting over other dimensions
     spec_ap = xr.apply_ufunc(
         _fit_func,
