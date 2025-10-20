@@ -6,7 +6,7 @@ import xarray as xr
 import numpy as np
 
 def window_xr(data: xr.DataArray, dim: str, centers: np.ndarray, 
-              pre: float, post: float, indices: bool = False) -> xr.DataArray:
+              pre: float|int, post: float|int, indices: bool = False) -> xr.DataArray:
     """
     Windows an xarray DataArray along a specified dimension.
 
