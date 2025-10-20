@@ -110,7 +110,7 @@ def states_lfp_mot(lfp, mot, delta=[1, 4], theta=(6,9), high=(20,80), exclude_re
     
     # process movement signal
     mot_rate = 1 / np.nanmedian(np.diff(mot.time.values))
-    mot = mot.rolling(time=int(mot_rate*5), min_periods=1, center=True).mean()
+    mot = mot.rolling(time=int(mot_rate*20), min_periods=1, center=True).mean()
 
     # sample motion at spectral time points
     mot_interp = np.interp(spec.time.values, mot.time.values, mot.values.flatten())
@@ -139,7 +139,7 @@ def states_lfp_mot(lfp, mot, delta=[1, 4], theta=(6,9), high=(20,80), exclude_re
     #states[(spec_z[:,0] < 0) & (spec_z[:,2] > 0)] = 1  # wake
 
     if not exclude_rem:
-        states[(spec_z[:,1] > (spec_z[:,1].max()/4)) & (spec_z[:,0] < 0) & (spec_z[:,3] < 0)] = 3  # rem
+        states[(spec_z[:,1] > (spec_z[:,1].max()/4)) & (spec_z[:,0] < 0) & (spec_z[:,3] < -0.1)] = 3  # rem
 
     states[spec_z[:,3] > 1] = 0  # active
 
@@ -186,7 +186,7 @@ def add_states_xr(data_xr, states_xr, method='nearest'):
     )
     
     # Add states as a new coordinate
-    data_xr = data_xr.assign_coords(states=interp_states)
+    data_xr = data_xr.assign_coords(state=interp_states)
 
     return data_xr
 
