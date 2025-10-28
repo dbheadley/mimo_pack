@@ -74,3 +74,43 @@ def window_xr(data: xr.DataArray, dim: str, centers: np.ndarray,
     out_xr = out_xr.rename({dim: f"{dim}_relative"})
 
     return out_xr
+
+
+def zscore_xr(x: xr.DataArray, dim: str|list = None, bg: dict = None,
+              skipna = True) -> xr.DataArray:
+    """
+    Z-score the data based on background mean and std.
+
+    Parameters
+    ----------
+    x : xr.DataArray
+        The input data array to be z-scored.
+    dim : str|list, optional
+        The dimensions along which to z-score. If None, z-scores
+        along all dimensions. Default is None.
+    bg : dict
+        Dictionary containing data range used for calculating
+        background mean and standard deviation. Should have keys
+        for xarray dimensions and specify the slice for each dimension.
+        E.g. {'time': slice(-1, 0)}.
+        Default is all data.
+    skipna : bool, optional
+        Whether to skip NaN values when calculating the z-score.
+        Default is True.
+
+    Returns
+    -------
+    xz :xr.DataArray
+        The z-scored data array.
+    """
+
+    if bg is None:
+        bg = x
+    else:
+        bg = x.sel(bg)
+    
+    mean = bg.mean(dim=dim, skipna=skipna)
+    std = bg.std(dim=dim, skipna=skipna)
+
+    xz = (x - mean) / std
+    return xz

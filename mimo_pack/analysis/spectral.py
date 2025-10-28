@@ -80,7 +80,7 @@ def stft_xr(signal, window=1, **kwargs):
 
 
 def wavelet_xr(signal, freqs=np.power(2,np.arange(0,7,0.25)), wavelet='cmor2.5-1.0',
-               remove_dc=True, verbose=True):
+               remove_dc=True, time_dim='time', verbose=True):
     """
     Apply a wavelet transform an xarray signal
 
@@ -97,6 +97,8 @@ def wavelet_xr(signal, freqs=np.power(2,np.arange(0,7,0.25)), wavelet='cmor2.5-1
     remove_dc : bool, optional
         Whether to remove the DC offset from the signal before
         applying the wavelet transform. Default is True.
+    time_dim : str, optional
+        Name of the time dimension in the input xarray. Default is 'time'.
     verbose : bool, optional
         Whether to print warnings about the size of the resulting
         wavelet transform. Default is True.
@@ -108,8 +110,8 @@ def wavelet_xr(signal, freqs=np.power(2,np.arange(0,7,0.25)), wavelet='cmor2.5-1
         added 'frequency' dimension appended.
     """
 
-    if 'time' not in signal.dims:
-        raise ValueError("Input xarray must have a 'time' dimension.")
+    if time_dim not in signal.dims:
+        raise ValueError(f"Input xarray must have a '{time_dim}' dimension.")
     
     if not isinstance(freqs, np.ndarray):
         freqs = np.array(freqs)
@@ -123,14 +125,14 @@ def wavelet_xr(signal, freqs=np.power(2,np.arange(0,7,0.25)), wavelet='cmor2.5-1
                       UserWarning)
 
     # Extract time and sampling frequency
-    time = signal['time'].values
+    time = signal[time_dim].values
     dt = np.nanmedian(np.diff(time))
     fs = 1.0 / dt
 
     arr = signal.to_numpy()
     dims = signal.dims
 
-    time_axis = np.where(np.array(dims) == 'time')[0][0]
+    time_axis = np.where(np.array(dims) == time_dim)[0][0]
 
     # Create a continuous wavelet transform object
     # We will use the complex Morlet wavelet
