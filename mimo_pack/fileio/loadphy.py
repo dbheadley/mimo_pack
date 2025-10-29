@@ -136,6 +136,10 @@ def as_pynapple(phy_dir, dcl_file=None, suffix="", cluster_ids=None,
         clu_group = pd.read_csv(group_fpath, sep="\t", index_col="cluster_id")
         clu_group = clu_group.rename(columns={'SASLabel': 'class'})
         clu_group = clu_group.sort_index()
+
+        # keep only clusters that were loaded
+        clu_group = clu_group.loc[clu_id_list]
+        
         spks.set_info(clu_group)
     
     # if dcl_file provided, get spike waveform properties:
