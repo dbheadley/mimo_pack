@@ -8,7 +8,7 @@ import dclut as dcl
 import numpy as np
 import pandas as pd
 
-def nearest_grid(probe_dcl, dx=250, dy=100):
+def nearest_grid(probe_dcl, dx=250.0, dy=100.0, max_dist=100.0):
     """
     Find the channels on a probe nearest to grid points.
 
@@ -16,10 +16,12 @@ def nearest_grid(probe_dcl, dx=250, dy=100):
     ----------
     probe_dcl : dclut.Probe
         The probe data containing x and y positions.
-    dx : int, optional
-        The step size for the x-axis (default is 250).
-    dy : int, optional
-        The step size for the y-axis (default is 100).
+    dx : float, optional
+        The step size for the x-axis (default is 250.0).
+    dy : float, optional
+        The step size for the y-axis (default is 100.0).
+    max_dist : float, optional
+        The maximum distance to consider a channel as a candidate (default is 100.0).
 
     Returns
     -------
@@ -47,16 +49,23 @@ def nearest_grid(probe_dcl, dx=250, dy=100):
     ch_near = np.empty(X.size, dtype=ch_idx.dtype)
     x_near = np.empty(X.size, dtype=x_pos.dtype)
     y_near = np.empty(X.size, dtype=y_pos.dtype)
-
+    bad_chans = []
     for i, (x, y) in enumerate(zip(X.flatten(), Y.flatten())):
         # calculate the distance from each channel to the grid point
         distances = np.sqrt((x_pos - x)**2 + (y_pos - y)**2)
         nearest_idx = np.nanargmin(distances)
         
-        # set the channel position to the grid point
-        ch_near[i] = ch_idx[nearest_idx]
-        x_near[i] = x_pos[nearest_idx]
-        y_near[i] = y_pos[nearest_idx]
+        # check if the nearest channel is within the maximum distance
+        if distances[nearest_idx] > max_dist:
+            bad_chans.append(i)
+        else:
+            ch_near[i] = ch_idx[nearest_idx]
+            x_near[i] = x_pos[nearest_idx]
+            y_near[i] = y_pos[nearest_idx]
+
+    ch_near = np.delete(ch_near, bad_chans)
+    x_near = np.delete(x_near, bad_chans)
+    y_near = np.delete(y_near, bad_chans)
 
     return ch_near, x_near, y_near
 

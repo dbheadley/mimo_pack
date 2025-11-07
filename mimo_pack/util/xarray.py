@@ -4,6 +4,7 @@
 
 import xarray as xr
 import numpy as np
+import pandas as pd
 
 def window_xr(data: xr.DataArray, dim: str, centers: np.ndarray, 
               pre: float|int, post: float|int, indices: bool = False) -> xr.DataArray:
@@ -75,6 +76,50 @@ def window_xr(data: xr.DataArray, dim: str, centers: np.ndarray,
 
     return out_xr
 
+def window_df_xr(data: xr.DataArray, df: pd.DataFrame|pd.Series, 
+                 center_cols: str,  dim: str, pre: float|int, post: float|int, 
+                 coord_cols: str|list = None, **kwargs) -> xr.DataArray:
+    """
+    Apply a windowing function to an xarray DataArray based on a pandas DataFrame or Series.
+
+    Parameters
+    ----------
+    data : xr.DataArray
+        The xarray DataArray to window.
+    df : pd.DataFrame|pd.Series
+        The pandas DataFrame or Series containing the windowing information.
+    center_cols : str
+        The column(s) in df that contain the center points for the windows.
+    coord_cols : str|list, optional
+        The column(s) in df that contain the coordinates for the windows.
+    dim : str
+        The dimension along which to window (e.g., 'time').
+    pre : float|int
+        A float specifying the length before each center.
+    post : float|int
+        A float specifying the length after each center.
+    **kwargs
+        Additional keyword arguments to pass to the windowing function.
+
+    Returns
+    -------
+    out_xr : xr.DataArray
+        A new xarray DataArray containing the windowed data.
+    """
+
+    centers = df[center_cols].values
+    if coord_cols is not None:
+        coords = df[coord_cols].values
+    else:
+        coords = None
+
+    out_xr = window_xr(data, dim=dim, centers=centers, pre=pre, post=post, **kwargs)
+
+    if coords is not None:
+        for i, col in enumerate(coord_cols):
+            out_xr = out_xr.assign_coords({col: (('window',), coords[:, i])})
+
+    return out_xr
 
 def zscore_xr(x: xr.DataArray, dim: str|list = None, bg: dict = None,
               skipna = True) -> xr.DataArray:
