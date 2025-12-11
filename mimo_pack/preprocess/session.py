@@ -28,7 +28,7 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
         The sync channel for the AP files as specified for dclut. 
         Default is {'channel': [384]}
     sync_nidq : dict
-        The sync channel for the NIDQ file as specified for dclut. 
+        The sync channel for the NIDQ file as specified for dclut. If None, no alignment is done.
         Default is {'channel': [5]}
     use_catgt_version : bool
         Whether to use the CatGT version of the files. 
@@ -39,6 +39,10 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
     df : pd.DataFrame
         A dataframe with the file names, the dclut json files, and the type of file
     """
+    
+    # print date and time that run started
+    print("Starting preprocessing for session: {}".format(sess_dir))
+    print("Run started at: {}".format(pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')))
     
     # identify all ap and nidq files in the session directory
     print("Identifying files in session directory: {}".format(sess_dir))
@@ -69,8 +73,9 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
         align_sync_dclut(file_t, ap_r, sync_ap, sync_ap, sync_scale_name, verbose=True)
     
     # Align the NIDQ file to the first AP file
-    print('Aligning {} to {}'.format(os.path.basename(nidq_dclut_file), os.path.basename(ap_r)))
-    align_sync_dclut(nidq_dclut_file, ap_r, sync_nidq, sync_ap, sync_scale_name, verbose=True)
+    if sync_nidq is not None:
+        print('Aligning {} to {}'.format(os.path.basename(nidq_dclut_file), os.path.basename(ap_r)))
+        align_sync_dclut(nidq_dclut_file, ap_r, sync_nidq, sync_ap, sync_scale_name, verbose=True)
 
     # make a LFP file from the imec AP files with dclut 
     lfp_files = []

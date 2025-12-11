@@ -126,7 +126,16 @@ def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=200, lfp_fs=1000, sync = 
     dcl_data.dcl['file']['name'] = os.path.split(lfp_path)[1]
     dcl_data.dcl['file']['shape'][time_dim] = len(lfp_times)
     dcl_data.dcl['scales'][time_scale]['type'] = 'table'
-    dcl_data.dcl['scales'][time_scale]['values'] = piecewise_table_monotonic(lfp_times)
+
+    # simplfy the time values using piecewise monotonic function, preserving NaNs
+    nan_inds = np.where(np.isnan(lfp_times))[0]
+    nan_times = np.column_stack((nan_inds, np.full(len(nan_inds), np.nan)))
+    pw_lfp_times = piecewise_table_monotonic(lfp_times, thresh=0.001)
+
+    pw_lfp_times = np.vstack((pw_lfp_times, nan_times))
+    pw_lfp_times = pw_lfp_times[np.argsort(pw_lfp_times[:,0]),:]
+
+    dcl_data.dcl['scales'][time_scale]['values'] = pw_lfp_times
     dcl_data.save(path=lfp_dcl_path)
     
     return lfp_path

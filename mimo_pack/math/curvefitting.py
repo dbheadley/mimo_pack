@@ -4,6 +4,8 @@
 
 from scipy.optimize import curve_fit
 import numpy as np
+from rdp import rdp
+
 
 def fit_sine_freq(x, xp, yp, freq):
     """
@@ -93,8 +95,7 @@ def fit_half_gauss(x, xp, yp, **kwargs):
     fit = half_gauss(x, *popt)
     return fit, popt
 
-
-def piecewise_table_monotonic(vals, thresh=None):
+def piecewise_table_monotonic(vals, thresh=0.001):
     """
     Reduce a list of monotonically increasing values to a table of key 
     points that define a piecewise function. The rate of increase is assumed 
@@ -132,41 +133,48 @@ def piecewise_table_monotonic(vals, thresh=None):
     plt.plot(table[:,0], table[:,1], 'ro')
     """
 
-    vals_num = len(vals)
-    table = np.array([[0, vals[0]]])
-    slope = np.nanmedian(np.diff(vals))
-    if thresh is None:
-        thresh = slope/2
+    # Use Ramer-Douglas-Peucker algorithm to reduce the points
+    nan_mask = np.isnan(vals)
+    valid_inds = np.where(~nan_mask)[0]
+    arr = np.column_stack((valid_inds, vals[~nan_mask]))
+    table = rdp(arr, epsilon=thresh)
 
-    # Find the starts and ends of NaN values so that all of them can be included in the table
-    nan_edges = np.argwhere(np.abs(np.diff(np.isnan(vals)))==1)
-    if len(nan_edges) > 0:
-        nan_edges = nan_edges.flatten()[np.newaxis,:]+1
-        table = np.vstack((table, np.vstack((nan_edges, vals[nan_edges])).T, 
-                           np.vstack((nan_edges-1, vals[nan_edges-1])).T))
-                
-    ind = 0
-    while ind < vals_num-1:
-        if np.isnan(vals[ind]):
-            next_ind = np.argwhere(~np.isnan(vals[ind:]))
-        else:
-            pred_vals = vals[ind] + slope*np.arange(0, ((vals_num-1)-ind))
-            cum_err = np.abs(np.nancumsum(vals[ind:-1]-pred_vals))
-            next_ind = np.argwhere(cum_err>thresh)
-
-        if len(next_ind) == 0:
-            break
-        else:
-            next_ind = next_ind[0][0]
-
-        if (ind>0):
-            table = np.vstack((table, [ind+next_ind-1, vals[ind+next_ind-1]]))
-        table = np.vstack((table, [ind+next_ind, vals[ind+next_ind]]))
-        ind += next_ind
     
-    table = np.vstack((table, [vals_num-1, vals[-1]]))
-    uniq_inds = np.unique(table[:,0], return_index=True)[1]
-    table = table[uniq_inds]
+    # vals_num = len(vals)
+    # table = np.array([[0, vals[0]]])
+    # slope = np.nanmedian(np.diff(vals))
+    # if thresh is None:
+    #     thresh = slope/2
+
+    # # Find the starts and ends of NaN values so that all of them can be included in the table
+    # nan_edges = np.argwhere(np.abs(np.diff(np.isnan(vals)))==1)
+    # if len(nan_edges) > 0:
+    #     nan_edges = nan_edges.flatten()[np.newaxis,:]+1
+    #     table = np.vstack((table, np.vstack((nan_edges, vals[nan_edges])).T, 
+    #                        np.vstack((nan_edges-1, vals[nan_edges-1])).T))
+                
+    # ind = 0
+    # while ind < vals_num-1:
+    #     if np.isnan(vals[ind]):
+    #         next_ind = np.argwhere(~np.isnan(vals[ind:]))
+    #     else:
+    #         pred_vals = vals[ind] + slope*np.arange(0, ((vals_num-1)-ind))
+    #         cum_err = np.abs(np.nancumsum(vals[ind:-1]-pred_vals))
+    #         next_ind = np.argwhere(cum_err>thresh)
+
+    #     if len(next_ind) == 0:
+    #         break
+    #     else:
+    #         next_ind = next_ind[0][0]
+
+    #     if (ind>0):
+    #         table = np.vstack((table, [ind+next_ind-1, vals[ind+next_ind-1]]))
+    #     table = np.vstack((table, [ind+next_ind, vals[ind+next_ind]]))
+    #     ind += next_ind
+    
+    # table = np.vstack((table, [vals_num-1, vals[-1]]))
+    # uniq_inds = np.unique(table[:,0], return_index=True)[1]
+    # table = table[uniq_inds]
     return table
 
 

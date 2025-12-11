@@ -67,6 +67,12 @@ def nearest_grid(probe_dcl, dx=250.0, dy=100.0, max_dist=100.0):
     x_near = np.delete(x_near, bad_chans)
     y_near = np.delete(y_near, bad_chans)
 
+    # remove duplicate channels
+    _, unique_idxs = np.unique(ch_near, return_index=True)
+    ch_near = ch_near[unique_idxs]
+    x_near = x_near[unique_idxs]
+    y_near = y_near[unique_idxs]
+    
     return ch_near, x_near, y_near
 
 

@@ -4,12 +4,13 @@
 
 import numpy as np
 import pandas as pd
-import pdb
+from numba import njit
 from tqdm import tqdm
 from scipy.stats import zscore
-from scipy.ndimage import binary_opening
 from dclut import dclut
 import xarray as xr
+import matplotlib.pyplot as plt
+import os
 
 def align_sync(sync_t, sync_r, time_r, matchlen=30, **kwargs):
     """
@@ -170,28 +171,74 @@ def align_sequence(ser1, ser2, matchlen, verbose=False):
     ser1 = np.pad(zscore(ser1), (matchlen, matchlen), constant_values=np.nan)
     ser2 = np.pad(zscore(ser2), (matchlen, matchlen), constant_values=np.nan)
    
-
     stop1 = len(ser1) - matchlen
     stop2 = len(ser2) - matchlen
-    s2 = matchlen # removed + 1
+    s2 = matchlen-1 # removed + 1
     pairs = []
     if verbose:
-        outer_iter = tqdm(range(matchlen+1, stop1))
+        outer_iter = tqdm(range(matchlen, stop1))
     else:
-        outer_iter = range(matchlen+1, stop1)
-
+        outer_iter = range(matchlen, stop1)
+    
     for s1 in outer_iter:
-        for s2off in range(1,stop2-s2): # changed range start to 1 from 0
-            serdiff = np.abs(ser1[(s1-matchlen):(s1+matchlen)]
-                             -ser2[(s2+s2off-matchlen):(s2+s2off+matchlen)])
-            serdiff = binary_opening(serdiff<1, np.ones(2*matchlen))
-            if serdiff[matchlen]:
-                s2 += s2off
-                pairs.append([s1, s2])
-                break
 
-    pairs = np.array(pairs) - matchlen - 1
+        s2_offset = _find_offset_numba(ser1, ser2, s1, s2, matchlen, stop2)
+
+        if s2_offset > 0:
+            s2 += s2_offset
+            pairs.append([s1, s2])
+        #else:
+        #    print('oops no match found at ser1 index ', s1)
+    
+    if len(pairs) > 0:
+        pairs = np.array(pairs) - matchlen
+    else:
+        pairs = np.empty((0,2), dtype=int)
+    
     return pairs
+
+@njit(fastmath=True)
+def _find_offset_numba(ser1, ser2, s1, s2, matchlen, stop2):
+    """
+    Numba optimized helper function to find offset in align_sequence.
+    
+    Parameters
+    ----------
+    ser1 : np.ndarray
+        First series to align
+    ser2 : np.ndarray
+        Second series to align
+    s1 : int
+        Current index in the first series
+    s2 : int
+        Current index in the second series
+    matchlen : int
+        Length of the matching window
+    stop2 : int
+        Stopping index for the second series
+    
+    Returns
+    -------
+    s2_offset : int
+        Offset to apply to s2 to find a match, 0 if no match found
+    """
+
+    for s2off in range(0,stop2-s2): # step through possible offsets
+        match = True # assume match until disproven
+
+        # test for match over the length of the window
+        for i in range(-matchlen, matchlen):
+            if np.abs(ser1[s1+i] - ser2[s2+s2off+i]) >= 1: # once mismatch occurs, break
+                match = False
+                break
+        
+        # if no mismatches found, return the offset
+        if match:
+            return s2off
+    
+    # if no match found, return 0, indicating no offset
+    return 0
+
 
 def align_sequence_exact(ser1, ser2, matchlen, verbose=False):
     """
@@ -287,54 +334,94 @@ def align_sync_dclut(path_t, path_r, sync_t, sync_r, sync_scale_name, verbose=Fa
         File path to dclut object for the target recording
     """
 
+    min_step = 600000 # chunk size for loading data
     # data loaded in chunks to avoid memory issues
     # load the target recording
     if verbose:
         print('Reading target file')
+
     dcl_t = dclut(path_t, verbose=verbose)
-    # create an array of edges for 1 minute intervals
-    max_sec = dcl_t.scale_values(sync_scale_name)[-1]
-    min_edges = np.append(np.arange(0, max_sec, 60), max_sec)
-    min_intervals = np.stack([min_edges[:-1], min_edges[1:]],axis=1)
+
+    dim_t = dcl_t.dcl['scales'][sync_scale_name]['dim']
+    t = dcl_t.scale_values(sync_scale_name)
+
+    steps = np.append(np.arange(0, len(t), min_step), len(t)).astype(int)
+    min_intervals = np.stack([steps[:-1], steps[1:]], axis=1)
+
     # configure the dclut object to read a single channel
-    dcl_t.intervals({sync_scale_name: min_intervals}, select_mode='split')
+    dcl_t.intervals({'s{}'.format(dim_t): min_intervals}, select_mode='split')
     dcl_t.points(sync_t)
     sync = dcl_t.read(format='xarray')
     # concatenate the data along the time dimension using xarray
-    sync_t = xr.concat(sync, dim=sync_scale_name)
+
+    sync_t_data = []
+    sync_t_time = []
+    for seg in sync:
+        sync_t_data.append(seg.values.ravel())
+        sync_t_time.append(seg['time'].values.ravel())
+
+    s_t = np.concatenate(sync_t_data)
 
     # repeat the process for the reference recording
     if verbose:
         print('Reading reference file')
+
     dcl_r = dclut(path_r, verbose=verbose)
-    max_sec = dcl_r.scale_values(sync_scale_name)[-1]
-    min_edges = np.append(np.arange(0, max_sec, 60), max_sec)
-    min_intervals = np.stack([min_edges[:-1], min_edges[1:]],axis=1)
-    dcl_r.intervals({sync_scale_name: min_intervals}, select_mode='split')
+    t = dcl_r.scale_values(sync_scale_name)
+    dim_r = dcl_r.dcl['scales'][sync_scale_name]['dim']
+
+    steps = np.append(np.arange(0, len(t), min_step), len(t)).astype(int)
+    min_intervals = np.stack([steps[:-1], steps[1:]], axis=1)
+    dcl_r.intervals({'s{}'.format(dim_r): min_intervals}, select_mode='split')
     dcl_r.points(sync_r)
     sync = dcl_r.read(format='xarray')
-    sync_r = xr.concat(sync, dim=sync_scale_name)
+
+    sync_r_data = []
+    sync_r_time = []
+    for seg in sync:
+        sync_r_data.append(seg.values.ravel())
+        sync_r_time.append(seg['time'].values.ravel())
+    s_r = np.concatenate(sync_r_data)
+    time_r = np.concatenate(sync_r_time)
 
     # align the two recordings
     if verbose:
         print('Aligning sync signals')
-    s_r = sync_r.data
-    s_t = sync_t.data
-    time_r = sync_r['time'].data
-    align_table = align_sync(s_t, s_r, time_r, matchlen=30, verbose=verbose)
+
+    align_table = align_sync(s_t, s_r, time_r, matchlen=60, verbose=verbose)
 
     # if alignment is not perfect, nan the edges of the recording
     if align_table[0,0] != 0:
         align_table = np.vstack([[0,np.nan], align_table])
-    
+
     if align_table[-1,0] != len(s_t):
         align_table = np.vstack([align_table, [len(s_t), np.nan]])
-
+    
     # update the dclut object with the new alignment
     new_scale = dcl_t.dcl['scales'][sync_scale_name]
     new_scale['type'] = 'table'
     new_scale['values'] = align_table
     dcl_t.save()
+
+    # plot aligned time quality control report
+    t = dcl_t.scale_values(sync_scale_name)
+
+    fig, ax = plt.subplots(2,1)
+    ax[0].plot(t)
+    ax[0].set_title('Target time values')
+    ax[0].set_ylabel('Time (s)')
+    ax[0].set_xlabel('Sample Index')
+    ax[0].grid()
+    ax[1].hist(np.diff(t))
+    ax[1].set_title('Time steps')
+    ax[1].set_xlabel('Time Step (s)')
+    ax[1].set_ylabel('Count')
+    fig.tight_layout()
+
+    # save figure as a pdf in the same folder as the original file, replacing the dclut extension with _timealign_qc.pdf
+    dir_name = os.path.dirname(path_t)
+    fig_path = os.path.join(dir_name, os.path.basename(path_t).replace('_dclut.json', '_timealign_qc.pdf'))
+    fig.savefig(fig_path)
 
     return path_t
 
