@@ -7,7 +7,7 @@ import numpy as np
 
 def wave_map(waves, x_pos, y_pos, c=None, x_scale=1, y_scale=1, 
              cmap='viridis', vmin=None, vmax=None, ax=None, 
-             **kwargs):
+             text=None, **kwargs):
     """
     Plots a map of waveforms across channels.
 
@@ -35,6 +35,8 @@ def wave_map(waves, x_pos, y_pos, c=None, x_scale=1, y_scale=1,
         Maximum value for color scaling (default is None).
     ax : matplotlib.axes.Axes, optional
         Axes to plot on (default is None, creates a new figure).
+    text : list of str, optional
+        List of text labels for each waveform (default is None).
     **kwargs : additional keyword arguments
         Additional parameters for `plt.plot`.
 
@@ -65,6 +67,10 @@ def wave_map(waves, x_pos, y_pos, c=None, x_scale=1, y_scale=1,
     elif not isinstance(c, np.ndarray):
         c = np.array(c)
 
+    if text is not None:
+        if len(text) != len(waves):
+            raise ValueError("Length of text must match length of waves")
+    
     # set colors by colormap
     if isinstance(c, np.ndarray) and np.issubdtype(c.dtype, np.number):
         if vmin is None:
@@ -84,6 +90,9 @@ def wave_map(waves, x_pos, y_pos, c=None, x_scale=1, y_scale=1,
         y_vals = y_pos[i] + wave * y_scale
 
         ax.plot(x_vals, y_vals, color=c[i], **kwargs)
+        if text is not None:
+            ax.text(x_vals[0], y_vals[0], text[i], fontsize=8,
+                    verticalalignment='bottom', horizontalalignment='left')
 
     return ax
 
@@ -154,7 +163,7 @@ def amp_map_xr(amp, x_coord='ch_x', y_coord='ch_y', **kwargs):
     
     return ax, scat
 
-def wave_map_xr(waves, x_coord='ch_x', y_coord='ch_y', time_dim='time', **kwargs):
+def wave_map_xr(waves, x_coord='ch_x', y_coord='ch_y', time_dim='time', label_coord=None, **kwargs):
     """
     Plot a map of waveforms across channels using xarray coordinates.
 
@@ -168,6 +177,8 @@ def wave_map_xr(waves, x_coord='ch_x', y_coord='ch_y', time_dim='time', **kwargs
         The name of the y coordinate in the DataArray (default is 'ch_y').
     time_dim : str, optional
         The name of the time dimension in the DataArray (default is 'time').
+    label_coord : str, optional
+        The name of the coordinate to use for labeling each waveform (default is None).
     **kwargs : dict, optional
         Additional keyword arguments for the plot.
 
@@ -182,6 +193,11 @@ def wave_map_xr(waves, x_coord='ch_x', y_coord='ch_y', time_dim='time', **kwargs
     
     waves = waves.transpose(time_dim, ch_dim)
     
-    ax = wave_map(waves.data, waves[x_coord].values, waves[y_coord].values, **kwargs)
+    if label_coord is not None:
+        text = waves.coords[label_coord].values
+    else:
+        text = None
+
+    ax = wave_map(waves.data, waves[x_coord].values, waves[y_coord].values, text=text, **kwargs)
     
     return ax

@@ -99,3 +99,57 @@ def preprocess_spikeglx(sess_dir, sync_ap={'channel': [384]}, sync_nidq={'channe
 
     df = pd.DataFrame(files, columns=['session_dir', 'file', 'dclut_file', 'type'])
     return df
+
+
+
+def get_session_dict(sess_dir, use_catgt_version=False):
+    """
+    Takes a session directory and returns a dictionary with fields 'nidq',
+    'imec'. The 'nidq' field contains the path to the nidq file and its dclut json file. The
+    'imec' field contains a list of dictionaries, each with fields 'ap', 'lfp', 'ap_dclut',
+    and 'lfp_dclut'.
+
+    Parameters
+    ----------
+    sess_dir : str
+        The session directory
+    use_catgt_version : bool
+        Whether to use the CatGT version of the files. 
+        Default is False
+
+    Returns
+    -------
+    session_dict : dict
+        A dictionary with fields 'nidq', 'imec'. The 'nidq' field contains the path to the nidq file 
+        and its dclut json file. The 'imec' field contains a list of dictionaries, each with fields 
+        'ap', 'lfp', 'ap_dclut', and 'lfp_dclut'.
+
+    """
+    if use_catgt_version:
+        ap_files = find_all_matching_files(sess_dir, r'tcat\.imec([0-9]+)\.ap\.bin')
+    else:
+        ap_files = find_all_matching_files(sess_dir, r't0\.imec([0-9]+)\.ap\.bin')
+    nidq_file = find_all_matching_files(sess_dir, r't0\.nidq\.bin')[0] # there should be only one nidq file
+
+    session_dict = {}
+
+    session_dict['nidq'] = {
+        'dir': os.path.dirname(nidq_file),
+        'file': nidq_file,
+        'dclut': nidq_file.replace('.bin', '_dclut.json')
+    }
+
+    imec_list = []
+    for ap_file in ap_files:
+        imec_dict = {}
+        imec_dict['dir'] = os.path.dirname(ap_file)
+        imec_dict['ap'] = ap_file
+        imec_dict['ap_dclut'] = ap_file.replace('.bin', '_dclut.json')
+        lfp_file = ap_file.replace('ap.bin', 'lfp.bin')
+        imec_dict['lfp'] = lfp_file
+        imec_dict['lfp_dclut'] = lfp_file.replace('.bin', '_dclut.json')
+        imec_list.append(imec_dict)
+
+    session_dict['imec'] = imec_list
+
+    return session_dict

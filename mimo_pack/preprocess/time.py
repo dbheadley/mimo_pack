@@ -493,6 +493,8 @@ def align_sync_video_barcode(table_path, path_r, barcode_name, sync_r, sync_scal
 
 
     # add times from alignment table to the video table
+    if 'time' in vid_df.columns:
+        vid_df = vid_df.drop(columns=['time'])
     vid_df = vid_df.join(align_df)
     vid_df.to_csv(table_path, na_rep='', index=True, index_label='frame')
 

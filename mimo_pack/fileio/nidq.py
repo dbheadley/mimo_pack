@@ -1,14 +1,13 @@
-"""Load dclut LFP files
+"""Load dclut nidq files
 Author: Drew B. Headley
 """
 
 import numpy as np
 import scipy.signal as ss
 import dclut as dcl
-from mimo_pack.analysis.probe import nearest_grid
+import xarray as xr
 
-def load_lfp_xr(lfp_path, notch_filter=False, remove_nan_time=True,
-                dx=250, dy=100, notch_freq=60, notch_width=10):
+def load_nidq_xr(nidq_path: str, chan_names: dict=None, remove_nan_time=True) -> xr.DataArray:
     """
     Load LFP data from a dclut file as an xarray object, with options 
     for 60 Hz notch filtering, removing NaN time steps, and selecting 
@@ -18,44 +17,32 @@ def load_lfp_xr(lfp_path, notch_filter=False, remove_nan_time=True,
     ----------
     lfp_path : str
         Path to the dclut LFP file.
-    notch_filter : bool, optional
-        Whether to apply a 60 Hz notch filter (default: False).
+    chan_names : dict, optional
+        Dictionary mapping standard channel names to those in the file.
     remove_nan_time : bool, optional
         Whether to remove time steps with NaN values (default: True).
-    dx : float, optional
-        Grid spacing in microns along x (default: 250).
-    dy : float, optional
-        Grid spacing in microns along y (default: 100).
-    notch_freq : float, optional
-        Frequency to notch filter (default: 60).
-    notch_width : float, optional
-        Notch filter width (default: 10).
+   
 
     Returns
     -------
-    lfp : xarray.DataArray
-        LFP data as an xarray object.
+    nidq : xarray.DataArray
+        NIDQ data as an xarray object.
     """
     # Load dclut object
-    lfp_dcl = dcl.dclut(lfp_path)
+    nidq_dcl = dcl.dclut(nidq_path)
 
-    # Select grid of channels
-    ch_grid = nearest_grid(lfp_dcl, dx=dx, dy=dy)[0]
-    lfp_dcl.reset()
-    lfp_dcl.points(select={'channel': ch_grid})
-    lfp_xr = lfp_dcl.read(format='xarray')[0]
-    lfp_xr = lfp_xr.sortby(['ch_x', 'ch_y'])
-    fs = 1/np.nanmedian(np.diff(lfp_xr.time.to_numpy().flatten()))
-    lfp_xr = lfp_xr.assign_attrs(sample_rate = fs)
+    num_t_samples = nidq_dcl.shape[1]
 
+    nidq_dcl.reset()
+    nidq_dcl.interval(select={'s1': [0, num_t_samples]})
+    nidq_xr = nidq_dcl.read(format='xarray')[0]
+    
+    fs = 1/np.nanmedian(np.diff(nidq_xr.time.to_numpy().flatten()))
+    nidq_xr = nidq_xr.assign_attrs(sample_rate = fs)
+    
     # Remove time steps with NaN if requested
     if remove_nan_time:
-        mask = ~np.isnan(lfp_xr.time.values)
-        lfp_xr = lfp_xr.isel(time=mask)
-
-    # Notch filter if requested
-    if notch_filter:
-        b, a = ss.iirnotch(notch_freq, notch_width, fs=fs)
-        lfp_xr.data = ss.filtfilt(b, a, lfp_xr.values, axis=0)
-
-    return lfp_xr
+        mask = ~np.isnan(nidq_xr.time.values)
+        nidq_xr = nidq_xr.isel(time=mask)
+    
+    return nidq_xr

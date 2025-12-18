@@ -5,6 +5,8 @@
 import cv2
 import os
 import glob
+import sys
+from contextlib import redirect_stdout
 import argparse
 import re
 import json
@@ -12,6 +14,12 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import pdb
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+from mimo_pack.preprocess.time import align_sync_video_barcode
+from mimo_pack.plot.video import plot_video_data
 
 def tif_to_video(folder_path, output_base=None, fps=30):
     """ Convert TIF images to a video. 
@@ -74,6 +82,7 @@ def tif_to_video(folder_path, output_base=None, fps=30):
     # write frame data to csv file
     files_df = files_df.drop(columns=['tif_path'])
     files_df.to_csv(tbl_path)
+    return vid_path, tbl_path
 
 
 def video_frame_table(video_path: str, out_csv: str | None = None) -> pd.DataFrame:
@@ -181,7 +190,27 @@ def create_video_rois(video_path, frame_time=0):
     
     # convert ROIs to a list of tuples
     rois = [(int(x), int(y), int(w), int(h)) for x, y, w, h in rois]
+
+    # Create a directory for quality control reports
+    qc_dir = os.path.join(os.path.dirname(video_path), 'qc_reports')
+    os.makedirs(qc_dir, exist_ok=True)
+
+    # Create a figure and plot the frame with ROIs
+    fig, ax = plt.subplots(1)
+    ax.imshow(cv2.cvtColor(adjusted_frame, cv2.COLOR_BGR2RGB))
     
+    for i, (x, y, w, h) in enumerate(rois):
+        rect = patches.Rectangle((x, y), w, h, linewidth=1, edgecolor='r', facecolor='none')
+        ax.add_patch(rect)
+        ax.text(x, y - 10, f'ROI {i}', color='red', fontsize=8, bbox=dict(facecolor='white', alpha=0.5, pad=0))
+
+    ax.set_title('Selected ROIs')
+    ax.axis('off')
+    
+    # Save the figure
+    output_pdf_path = os.path.join(qc_dir, 'selected_rois.pdf')
+    fig.savefig(output_pdf_path)
+
     return rois
 
     
@@ -412,6 +441,69 @@ def rois_to_barcodes(table_path, roi_cols, roi_thresh=200, barcode_name='barcode
 
     barcode_df = tbl_df[[barcode_name]].copy()
     return barcode_df
+
+
+def process_and_align_video(vid_path, tbl_path, rois, dcl_path, sync_channel_info):
+    """Process and align video data with neural recordings.
+
+    This function takes video data and associated metadata, tracks ROIs to
+    generate barcodes, aligns these barcodes with neural recording data, and
+    saves quality control (QC) plots and logs to a 'qc_reports' directory.
+
+    Parameters
+    ----------
+    vid_path : str
+        Path to the video file (.mp4).
+    tbl_path : str
+        Path to the video metadata table (.csv).
+    rois : list
+        List of ROIs for barcode tracking.
+    dcl_path : str
+        Path to the dclut file for neural data alignment.
+    sync_channel_info : dict
+        Dictionary specifying the sync channel.
+
+    Returns
+    -------
+    str
+        The path to the CSV table after alignment, which includes the aligned
+        timestamps.
+    """
+    # Create a directory for quality control reports
+    qc_dir = os.path.join(os.path.dirname(vid_path), 'qc_reports')
+    os.makedirs(qc_dir, exist_ok=True)
+
+    # Track ROIs across video frames
+    roi_df = track_video_rois(vid_path, tbl_path, rois=rois)
+
+    # Generate and save a plot of barcode signals
+    roi_vals = roi_df.values
+    fig, ax = plt.subplots(figsize=(8, 2))
+    ax.imshow(roi_vals[:200].T, aspect='auto', cmap='gray', interpolation='none')
+    ax.set_ylabel('ROI')
+    ax.set_xlabel('Frame')
+    ax.set_title('Barcodes Across Frames')
+    fig.savefig(os.path.join(qc_dir, 'barcode_signals.pdf'))
+
+    # Convert ROI signals to a barcode sequence in the table
+    rois_to_barcodes(tbl_path, roi_cols=['roi_' + str(i) for i in range(len(rois))])
+
+    # Align video barcodes to neural recording times
+    # Redirect verbose output to a text file
+    
+    log_path = os.path.join(qc_dir, 'alignment_log.txt')
+    with open(log_path, 'w') as f:
+        with redirect_stdout(f):
+            aligned_tbl_path = align_sync_video_barcode(
+                tbl_path, dcl_path, 'barcode', sync_channel_info, 'time', verbose=True
+            )
+
+    # Generate and save a plot of the aligned video data
+    fig, ax = plt.subplots(figsize=(8, 2))
+    plot_video_data(aligned_tbl_path, ax=ax)
+    fig.savefig(os.path.join(qc_dir, 'aligned_video_data.pdf'))
+
+    return aligned_tbl_path
 
 # if __name__ == "__main__":
 #     parser = argparse.ArgumentParser(description='Convert TIF images to a video.')

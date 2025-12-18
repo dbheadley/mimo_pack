@@ -159,3 +159,180 @@ def zscore_xr(x: xr.DataArray, dim: str|list = None, bg: dict = None,
 
     xz = (x - mean) / std
     return xz
+
+
+def interp_stack_xr(da: xr.DataArray, coord_interp: str ='ch_y', coord_stack: str ='ch_x',
+                    spacing: float =15, coord_min: float =None, coord_max: float =None):
+    """
+    Interpolate voltages along one axis and stack along the other from an
+    xarray.DataArray onto a regular spatial grid.
+
+    Iterates over the stacking coordinate using xarray.groupby, interpolates
+    the data within each group onto a regular grid, and stacks the results.
+    Preserves coordinates associated with the stacking dimension if they are
+    consistent within groups, and preserves all coordinates associated with
+    non-interpolated dimensions.
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        Input data. Must have coordinates specified by coord_interp and 
+        coord_stack.
+    coord_interp : str, optional
+        Name of the coordinate to interpolate along. Default is 'ch_y'.
+    coord_stack : str, optional
+        Name of the coordinate to stack groups along. Default is 'ch_x'.
+    spacing : float, optional
+        Spatial spacing for the interpolation grid. Default is 15.
+    coord_min : float, optional
+        Minimum value for the interpolation grid. If None, uses the 
+        minimum of the coord_interp values.
+    coord_max : float, optional
+        Maximum value for the interpolation grid. If None, uses the 
+        maximum of the coord_interp values.
+
+    Returns
+    -------
+    interp_da : xarray.DataArray
+        Interpolated data with new spatial dimensions replacing the 
+        original channel dimension.
+    """
+
+    if coord_interp not in da.coords or coord_stack not in da.coords:
+        raise ValueError(f"DataArray must contain coords '{coord_interp}' and '{coord_stack}'.")
+
+    # Ensure both coord_interp and coord_stack live on the same source dimension
+    interp_dims = da.coords[coord_interp].dims
+    stack_dims = da.coords[coord_stack].dims
+    
+    if len(interp_dims) != 1 or len(stack_dims) != 1:
+        raise ValueError("coord_interp and coord_stack must be 1-D coordinates.")
+    
+    channel_dim = interp_dims[0]
+    if stack_dims[0] != channel_dim:
+        raise ValueError(f"'{coord_interp}' and '{coord_stack}' must refer to the same dimension.")
+
+    # Identify other dimensions (e.g. time, trials)
+    orig_dims = list(da.dims)
+    channel_pos = orig_dims.index(channel_dim)
+    other_dims = [d for d in orig_dims if d != channel_dim]
+
+    # Identify candidate coordinates to preserve along the stack dimension
+    # These are coords that depend on channel_dim but are not the interp/stack coords themselves
+    stack_cand_coords = [
+        c for c in da.coords 
+        if channel_dim in da.coords[c].dims 
+        and c not in [coord_interp, coord_stack]
+    ]
+    
+    # Dictionary to collect values for stack candidate coords: {name: [val_group1, val_group2, ...]}
+    stack_coords_vals = {c: [] for c in stack_cand_coords}
+    
+    # Track which candidates remain valid (constant within every group so far)
+    valid_stack_coords = set(stack_cand_coords)
+
+    # Define interpolation grid
+    amin = float(da.coords[coord_interp].min().values) if coord_min is None else float(coord_min)
+    amax = float(da.coords[coord_interp].max().values) if coord_max is None else float(coord_max)
+    interp_grid = np.arange(amin, amax + spacing, spacing)
+    n_interp = interp_grid.size
+
+    interp_groups = []
+    group_keys = []
+
+    # Iterate over the stacking coordinate using groupby
+    for key, group in da.groupby(coord_stack):
+        
+        # Extract interpolation coordinates for this group
+        coords = group[coord_interp].values
+        
+        # Skip groups with fewer than 2 points (cannot interpolate)
+        if np.unique(coords).size < 2:
+            continue
+
+        # --- Handle Stack Coordinate Preservation ---
+        # Check if candidate coordinates are constant in this group
+        for c in list(valid_stack_coords):
+            # We use the raw values from the group
+            c_vals = group[c].values
+            unique_vals = np.unique(c_vals)
+            
+            # If strictly one unique value, we can potentially preserve it
+            if unique_vals.size == 1:
+                stack_coords_vals[c].append(unique_vals[0])
+            else:
+                # Variable within group; cannot be a stack coordinate
+                valid_stack_coords.remove(c)
+                del stack_coords_vals[c]
+
+        # --- Interpolation ---
+        # Prepare data: Move channel_dim to front (axis 0)
+        x = group.transpose(channel_dim, *other_dims)
+        
+        # Get shapes for reshaping
+        channel_len = x.sizes[channel_dim]
+        other_shapes = tuple(x.sizes[d] for d in other_dims)
+        n_slices = int(np.prod(other_shapes)) if other_shapes else 1
+
+        # Convert to numpy and collapse trailing dims: (n_chan_in_group, n_slices)
+        vals = x.values.reshape((channel_len, n_slices))
+
+        # Sort based on spatial coordinate
+        order = np.argsort(coords)
+        coords_sorted = coords[order]
+        vals_sorted = vals[order, :]
+
+        # Interpolate each collapsed slice
+        # Output shape: (n_interp, n_slices)
+        grp_res = np.empty((n_interp, n_slices), dtype=vals.dtype)
+        
+        for j in range(n_slices):
+            grp_res[:, j] = np.interp(interp_grid, coords_sorted, vals_sorted[:, j])
+
+        # Reshape back to (n_interp, *other_shapes)
+        if other_shapes:
+            grp_res = grp_res.reshape((n_interp,) + other_shapes)
+        else:
+            grp_res = grp_res.reshape((n_interp,))
+
+        interp_groups.append(grp_res)
+        group_keys.append(key)
+
+    if not interp_groups:
+        raise ValueError("No valid groups found for interpolation.")
+
+    # Stack groups: (coord_interp, coord_stack, *other_dims)
+    stacked = np.stack(interp_groups, axis=1)
+
+    # Reorder axes to match original dimensions
+    current_axes = [coord_interp, coord_stack] + other_dims
+    
+    # Final structure replaces channel_dim with [coord_interp, coord_stack]
+    final_dims = orig_dims.copy()
+    final_dims[channel_pos:channel_pos+1] = [coord_interp, coord_stack]
+
+    perm = [current_axes.index(d) for d in final_dims]
+    arr_permuted = np.transpose(stacked, perm)
+
+    # --- Build Output Coordinates ---
+    coords_dict = {}
+
+    # 1. New Interpolation and Stack Coordinates
+    coords_dict[coord_interp] = interp_grid
+    coords_dict[coord_stack] = np.array(group_keys)
+
+    # 2. Preserved Stack Coordinates (Auxiliary info on the stack dimension)
+    for c in valid_stack_coords:
+        # These now live along the coord_stack dimension
+        coords_dict[c] = (coord_stack, np.array(stack_coords_vals[c]))
+
+    # 3. Preserved Coordinates from Other Dimensions (e.g. Time)
+    # Copy any coordinate that does NOT depend on the channel_dim we just removed
+    for c in da.coords:
+        if channel_dim not in da.coords[c].dims:
+            coords_dict[c] = da.coords[c]
+
+    interp_da = xr.DataArray(arr_permuted, dims=tuple(final_dims), coords=coords_dict,
+                             attrs=da.attrs)
+
+    return interp_da

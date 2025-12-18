@@ -97,7 +97,7 @@ def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=200, lfp_fs=1000, sync = 
         else:
             high_edge = 0
         
-        dcl_data.intervals({ind_scale: [chunks[i]-low_edge, chunks[i+1]+high_edge-1]})
+        dcl_data.intervals({ind_scale: [chunks[i]-low_edge, chunks[i+1]+high_edge]})
         bin_data = dcl_data.read(format='xarray')[0]
         chunk_times = bin_data[time_scale].values
         chunk_inds = bin_data[ind_scale].values
@@ -108,9 +108,18 @@ def make_lfp_file_dclut(dcl_path, lfp_path, lfp_cutoff=200, lfp_fs=1000, sync = 
                                 down_factor=1, offset=0, ignore_chans=sync_chan)
             
             # remove buffer time points
-            lfp_data = lfp_data[low_edge:-(high_edge-1),:]
-            chunk_times = chunk_times[low_edge:-(high_edge-1)]
-            chunk_inds = chunk_inds[low_edge:-(high_edge-1)]
+            # If high_edge is 0, we want to slice to the end (None)
+            # If high_edge > 0, we want to slice off that many samples from the end
+            end_idx = -high_edge if high_edge > 0 else None
+            
+            lfp_data = lfp_data[low_edge:end_idx, :]
+            chunk_times = chunk_times[low_edge:end_idx]
+            chunk_inds = chunk_inds[low_edge:end_idx]
+
+            # # remove buffer time points
+            # lfp_data = lfp_data[low_edge:-(high_edge-1),:]
+            # chunk_times = chunk_times[low_edge:-(high_edge-1)]
+            # chunk_inds = chunk_inds[low_edge:-(high_edge-1)]
 
             # lfp data to keep for downsampling
             down_bool = np.where(np.isin(chunk_inds, down_inds))[0]
